@@ -15,7 +15,7 @@ import multiprocessing as mp
 from scipy.stats import norm
 from scipy.optimize import fsolve
 
-os.chdir("/data/compustat/policy/")
+os.chdir("./data/compustat/policy/")
 
 #---------------------
 # Database connection
@@ -71,7 +71,7 @@ def sim_process(df, T=1.0):
     iteration_time = time.time() - t0
 
     ## Distance -to-Default and PD
-    if ~any(np.isnan(fsolve_out)):
+    if not any(np.isnan(fsolve_out)):
         DD = (np.log(fsolve_out[0]/row.D) +(row.rf - 0.5*fsolve_out[1])*T)/(fsolve_out[1]*np.sqrt(T))
         PD = norm.cdf(-DD)
     else:
@@ -136,7 +136,7 @@ def two_step_process(df, T, max_iter=10, tol=1E-4):
                 #    print("Error in: ", row.gvkey, row.permco, row.permno, row.fyr)
    
         ## Step 2: Calculate firm value parameters
-        if df.loc[~df.V.isna()].shape[0] >= 50:
+        if df.loc[df.V.notna()].shape[0] >= 50:
             df['V_lag'] = df.V.shift(1)
             df['V_ret'] = np.log(df.V/df.V_lag)*252
             mean_V = df.V_ret.mean()
@@ -176,7 +176,7 @@ print("Preparing raw data..." + "\n")
 #-------------------------------------
 
 ## read the raw data file
-df = pd.read_csv("./data/merton_DD_data_WRDS_1970_1989.txt", sep="|")
+df = pd.read_csv("/scratch/frbkc/merton_DD_data_WRDS_1970_1989.txt", sep="|")
 df['date'] = pd.to_datetime(df.date)
 
 ## check duplicates
@@ -233,13 +233,13 @@ def sim_by_group(sample):
     dates = sample.date.groupby([sample.date.dt.year,sample.date.dt.month]).last()
 
     ## run simultaneous process for month end dates
-    for idx,daily_dt in dates.iteritems():
+    for idx,daily_dt in dates.items():
         dt_lag = sample.date_lag_250.loc[sample.date == daily_dt].iloc[0]
         daily_sample = sample.loc[(dt_lag < sample.date) & (sample.date <= daily_dt)]
-        if daily_sample.shape[0] >= 50 and ~(daily_sample[['E', 'D', 'rf']].iloc[-1].isna().any()):
+        if daily_sample.shape[0] >= 50 and not (daily_sample[['E', 'D', 'rf']].iloc[-1].isna().any()):
             x = sim_process(daily_sample, T=1)
             x = pd.DataFrame([x], columns=x.keys())
-            results_df = results_df.append(x, ignore_index=True)
+            results_df = pd.concat([results_df, x], ignore_index=True)
 
     return results_df
 
@@ -251,7 +251,7 @@ print("Simultaneous processing done.")
 
 ## get results and write output
 results_sim = pd.concat([p.get()for p in output])
-results_sim.to_csv("./data/merton_simultaneous_WRDS_1970_1989.txt", sep="|", index=False)
+results_sim.to_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|", index=False)
 
 #--------------------------------------
 print("""Estimate DD for all gvkeys\n 
@@ -268,13 +268,13 @@ def iter_by_group(sample):
     dates = sample.date.groupby([sample.date.dt.year,sample.date.dt.month]).last()
 
     ## run simultaneous process for month end dates
-    for idx,daily_dt in dates.iteritems():
+    for idx,daily_dt in dates.items():
         dt_lag = sample.date_lag_250.loc[sample.date == daily_dt].iloc[0]
         daily_sample = sample.loc[(dt_lag < sample.date) & (sample.date <= daily_dt)]
-        if daily_sample.shape[0] >= 50 and ~(daily_sample[['E', 'D', 'rf']].iloc[-1].isna().any()):
+        if daily_sample.shape[0] >= 50 and not (daily_sample[['E', 'D', 'rf']].iloc[-1].isna().any()):
             x = two_step_process(daily_sample, T=1)
             x = pd.DataFrame([x], columns=x.keys())
-            results_df = results_df.append(x, ignore_index=True)
+            results_df = pd.concat([results_df, x], ignore_index=True)
 
     return results_df
 
@@ -286,7 +286,7 @@ print("Two step processing done.")
 
 ## get results and write output
 results_iter = pd.concat([p.get() for p in output])
-results_iter.to_csv("./data/merton_iterated_WRDS_1970_1989.txt", sep="|", index=False)
+results_iter.to_csv("/scratch/frbkc/merton_iterated_WRDS_1970_1989.txt", sep="|", index=False)
 
 #------------------------------------------------------
 print("Log closed on " + str(datetime.datetime.now()))
