@@ -401,7 +401,7 @@ run;*/
 
 /*proc print data=test_data_small; run;*/
 
-%Merton_EDF(1986, 3, test_data, r);
+%Merton_EDF(1988, 04, test_data, r);
 proc export data=_convds
 	outfile="/scratch/frbkc/convds_output.csv"
 	dbms=csv
