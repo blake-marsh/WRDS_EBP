@@ -5,5 +5,4 @@
 #$ -pe onenode 8
 #$ -l m_mem_free=6G
 
-sas run_merton_DD.sas
-python3 compare.py
+sas -set year 1988 -set month 04 run_merton_DD.sas 
