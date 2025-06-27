@@ -20,10 +20,20 @@ merged = merged.merge(filtered_sim, on='permco')
 merged = merged.rename(columns={'DD':'DD_sim'})
 merged['difference_iter'] = abs(merged['DD_merton'] - merged['DD_iter'])
 merged['difference_sim'] = abs(merged['DD_merton'] - merged['DD_sim'])
+print(merged.columns) #want dates, and permco
 merged = merged[['DD_merton', 'DD_iter', 'DD_sim', 'difference_iter', 'difference_sim']] 
 print("Null values:\n", merged.isnull().sum())
 print("Summary Stats:\n", merged.describe())
 print("Data Preview:\n", merged.head())
+
+max_outlier = merged[merged['DD_merton'] == merged['DD_merton'].max()]
+print("Maxoutlier DD Merton:\n", max_outlier)
+min_outlier = merged[merged['DD_merton'] == merged['DD_merton'].min()]
+print("Minoutlier DD Merton:\n", min_outlier)
+max_outlier = merged[merged['DD_sim'] == merged['DD_sim'].max()]
+print("Maxoutlier DD sim:\n", max_outlier)
+min_outlier = merged[merged['DD_sim'] == merged['DD_sim'].min()]
+print("Minoutlier DD sim:\n", min_outlier)
 
 print("GZ_replication:", convds_df[convds_df['permco'] == 22326][['date', 'DD', 'DD_merton', 'A', 'E', 'D']])
 print("Iter:", iter_df.loc[(iter_df['permco'] == 22326) & (iter_df['date'] == '1988-04-29'), ['date', 'DD', 'A', 'E', 'D']])
