@@ -14,6 +14,7 @@ import pandas as pd
 import multiprocessing as mp
 from scipy.stats import norm
 from scipy.optimize import fsolve
+from scipy.optimize import root
 
 os.chdir("./data/compustat/policy/")
 
@@ -41,12 +42,17 @@ def merton_sim(x, E, D, sigma_E, r, T):
     return [y1, y2]
 
 ## single date simultaneous solver
-def sim_process(df, T=1.0):
-
+'''def sim_process(df, T=1.0):
     ## Initialize variables
     row = df.iloc[-1]
     gvkey = row.gvkey; fyr = row.fyr; permco = row.permco; permno = row.permno; date = row.date.date(); gsubind = row.gsubind; fic = row.fic
     convergence = False
+    if row.E > 1000 and row.D > 1000:
+        scale_factor = 100.0
+    else:
+        scale_factor = 1.0
+    E_scale = row.E / scale_factor
+    D_scale = row.D / scale_factor
 
     ## sort dataframe
     df = df.sort_values(['gvkey', 'fyr', 'permco', 'permno', 'date'])
@@ -59,10 +65,83 @@ def sim_process(df, T=1.0):
         sigma_V = 0.01
 
     t0 = time.time()
+    V_out = np.nan
+    sigma_out = np.nan
+    fsolve_out = [np.nan, np.nan]
     ## Solve the model
     warnings.simplefilter("error")
     try: 
+        print("sigma_E:", sigma_E)
+        print("Initial sigma_v:", sigma_V)
+        print("initial guess for fsolve:", row.E + row.D, sigma_V)
+        print("E:", row.E, "D:", row.D, "rf:", row.rf)
+        
+        fsolve_out = root(merton_sim, x0=np.array([row.E + row.D, sigma_V]), args=(row.E, row.D, sigma_E, row.rf, T), method='hybr', tol=1e-6)
+        V_out, sigma_out = fsolve_out
+        #fsolve_out = fsolve(merton_sim, x0=np.array([E_scale + D_scale, sigma_V]), args=(E_scale, D_scale, sigma_E, row.rf, T))
+        convergence = True
+    except:
+        #print("Error in row: ", (gvkey, fyr, permco, permno, date))
+        fsolve_out = [np.nan, np.nan]
+    
+
+    #V_final = fsolve_out[0] * scale_factor
+    iteration_time = time.time() - t0
+
+    ## Distance -to-Default and PD
+    #print("RES:", fsolve_out)
+    if not np.isnan(V_out) and not np.isnan(sigma_out):
+        DD = (np.log(V_out/row.D) +(row.rf - 0.5*sigma_out)*T)/(sigma_out*np.sqrt(T))
+        PD = norm.cdf(-DD)
+    else:
+        DD = np.nan; PD = np.nan
+
+    
+    ## return a dictionary 
+    result = {"gvkey":gvkey, "fyr":fyr, "permco":permco, "permno":permno, "date":date, "gsubind":gsubind, "fic":fic,
+              "A":row.A, "E":row.E, "D":row.D, "rf":row.rf, "DD":DD, "PD":PD,
+              "V":V_out, "sigma_V":sigma_out,  "convergence":convergence, 
+              "iteration_time":iteration_time}
+
+    return result'''
+
+## single date simultaneous solver
+def sim_process(df, T=1.0):
+    if len(df) < 50:
+        return None
+
+
+    ## Initialize variables
+    row = df.iloc[-1]
+    gvkey = row.gvkey; fyr = row.fyr; permco = row.permco; permno = row.permno; date = row.date.date(); gsubind = row.gsubind; fic = row.fic
+    convergence = False
+
+    ## sort dataframe
+    df = df.sort_values(['gvkey', 'fyr', 'permco', 'permno', 'date'])
+
+    if row.D == 0 or np.isnan(row.D):
+        return None
+
+    ## calculate returns and standard deviations
+    df['E_ret'] = np.log(df.E/df.E.shift(1))*252
+    sigma_E = (df.E_ret/252).std()*np.sqrt(252) #maybe floor it with better reasoning for number
+    if sigma_E < 0.01:
+        sigma_E = 0.01
+
+    sigma_V = sigma_E*(df.E.iloc[-1]/(df.E.iloc[-1]+df.D.iloc[-1]))
+    if sigma_V < 0.01:
+        sigma_V = 0.01
+
+    t0 = time.time()
+    ## Solve the model
+    warnings.simplefilter("error")
+    try: 
+        '''print("sigma_E:", sigma_E)
+        print("Initial sigma_v:", sigma_V)
+        print("initial guess for fsolve:", row.E + row.D, sigma_V)
+        print("E:", row.E, "D:", row.D, "rf:", row.rf)'''
         fsolve_out = fsolve(merton_sim, x0=np.array([row.E+row.D, sigma_V]), args=(row.E, row.D, sigma_E, row.rf, T))
+        #print("FSOLVE OUT:", fsolve_out)#full_output = True
         convergence = True
     except:
         #print("Error in row: ", (gvkey, fyr, permco, permno, date))
@@ -82,7 +161,6 @@ def sim_process(df, T=1.0):
               "A":row.A, "E":row.E, "D":row.D, "rf":row.rf, "DD":DD, "PD":PD,
               "V":fsolve_out[0], "sigma_V":fsolve_out[1],  "convergence":convergence, 
               "iteration_time":iteration_time}
-
     return result
      
 #------------------------------
@@ -102,7 +180,6 @@ def merton_iter(V, sigma_V, E, sigma_E, D, rf, T):
 ## two step process takes time series inputs by firm
 ## df must have: gvkey, date, A, D, E, rf
 def two_step_process(df, T, max_iter=10, tol=1E-4):
-
     ## Initialize variables
     last_row = df.iloc[-1]
     df = df.sort_values(['gvkey', 'fyr', 'permco', 'permno', 'date'])
@@ -217,6 +294,22 @@ df = df.merge(market_dates, on="date", how="left")
 
 df_by_groups = df.groupby(['gvkey', 'fyr', 'permco', 'permno'])
 df_by_groups = [i[1] for i in df_by_groups]
+'''test_df = df[(df.permco == 1603) & (df.date.dt.year == 1988) & (df.date.dt.month == 4)]
+
+test_date = test_df['date'].max()
+lag_date = test_df.loc[test_df.date == test_date, 'date_lag_250'].iloc[0]
+sample = df[(df.permco == 1603) & (df.date > lag_date) & (df.date <= test_date)]
+
+df_by_groups = [sample]
+
+print("Sample shape:", sample.shape)
+print("Date range:", sample.date.min(), "to", sample.date.max())
+
+print("Running sim_process()")
+result = sim_process(sample, T=1.0)
+for k, v in result.items():
+    print(f"{k}: {v}")'''
+
 
 #-------------------------------------------
 print("""Estimate DD for all gvkeys\n 
@@ -251,7 +344,7 @@ print("Simultaneous processing done.")
 
 ## get results and write output
 results_sim = pd.concat([p.get()for p in output])
-results_sim.to_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|", index=False)
+results_sim.to_csv("../../../test_sim_output.txt", sep="|", index=False)
 
 #--------------------------------------
 print("""Estimate DD for all gvkeys\n 
@@ -286,7 +379,7 @@ print("Two step processing done.")
 
 ## get results and write output
 results_iter = pd.concat([p.get() for p in output])
-results_iter.to_csv("/scratch/frbkc/merton_iterated_WRDS_1970_1989.txt", sep="|", index=False)
+results_iter.to_csv("../../../test_iter_output.txt", sep="|", index=False)
 
 #------------------------------------------------------
 print("Log closed on " + str(datetime.datetime.now()))

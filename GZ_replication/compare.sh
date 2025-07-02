@@ -8,5 +8,5 @@
 YEAR=1988
 MONTH=04
 
-# sas -set year "$YEAR" -set month "$MONTH" run_merton_DD.sas
+sas -set year "$YEAR" -set month "$MONTH" run_merton_DD.sas
 python3 compare.py "$YEAR" "$MONTH"

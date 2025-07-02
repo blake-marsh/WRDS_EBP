@@ -180,6 +180,8 @@
                  dlA = .;
                  end;
               end;
+	   put "DEBUG: PERMCO=" permco " DATE=" date " E=" E " D=" D " A=" A " dlA" dlA;
+		
        run;
 
        proc means data=_eds noprint;
@@ -199,12 +201,15 @@
            if _FREQ_ < 50 then delete;
            dlA_sigma = sqrt(252)*dlA;
            if dlA_sigma < 0.01 then dlA_sigma = 0.01;
+
+	   put "DEBUG STD: PERMCO=" permco " _FREQ_=" _FREQ_ " dlA_sigma=" dlA_sigma;
        run;
 
        data _mean(keep=permco large);
        set _mean;
            large = 0;
-           if D > 1000 and E > 1000 then large = 1;
+           if D > 1000 and E > 1000 then large = 1;	
+	   /*problematic lin: put "DEBUG: D > 1000? " (D > 1000) " E > 1000? " (E > 1000); */
        run;
 
        data _eds(drop=dlA);
@@ -322,13 +327,15 @@
                set _eds(where=(_CONV=0));
                    dlA_sigma = dlA_sigma1;
                    drop dlA_sigma1;
+		   put "DEBUG CONTINUE Iter &k: PERMCO=" permco " updated_sigma=" dlA_sigma " (not converged, continuing)";
+
                run;
                %end;
            %end;
            %end;
 
        
-       data _convds(keep=permco date _ITER _dif E D A DD DD_merton EDF mu_A sig_A);
+       data _convds(keep=permco permno gvkey date _ITER _dif E D A DD DD_merton EDF mu_A sig_A);
        format permco 8.;
        format date monyy7.;
        format large 1.;
@@ -344,7 +351,7 @@
              E = 100*E;
              D = 100*D;
              end;
-          date = mdy(&mm, 1, &yyyy);
+          format date yymmdd10.;
           DD = (A - D)/(A*sig_A);
           DD_merton = (log(A/D) + (mu_A - (sig_A**2)/2))/sig_A;
 	  EDF = probnorm(-DD_merton);
@@ -383,11 +390,23 @@ data test_data;
 	set merton_raw;
 	E = mkt_cap;
 	D = face_value_debt;
+	A = E + D; /* assets or E + D */
+	r = tyd01y;
+	_cdt = year(date)*100 + month(date);
+	keep permco permno gvkey date E D A r _cdt;
+run;
+
+data test_data_single;
+	set merton_raw;
+	where permco = 1603;
+	E = mkt_cap;
+	D = face_value_debt;
 	A = E + D;
 	r = tyd01y;
 	_cdt = year(date)*100 + month(date);
-	keep permco date E D A r _cdt;
+	keep permco permno gvkey date E D A r _cdt;
 run;
+
 /*proc freq data=test_data;
 	tables permco / noprint out=permco_counts;
 run;*/
@@ -414,7 +433,7 @@ run;
 proc contents data=_convds; run;
 proc print data=_convds(obs=10); run;
 proc print data=_convds;
-	where permco= 23369;
+	where permco= 1603;
 run;
 
 /*proc print data=_convds; run;*/
