@@ -3,8 +3,8 @@ import sys
 
 convds_df = pd.read_csv("/scratch/frbkc/convds_output.csv")
 iter_df = pd.read_csv("/scratch/frbkc/merton_iterated_WRDS_1970_1989.txt", sep="|")
-sim_df = pd.read_csv("../test_sim_output.txt", sep="|")
-#sim_df = pd.read_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|")
+#sim_df = pd.read_csv("../test_sim_output.txt", sep="|")
+sim_df = pd.read_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|")
 
 year = int(sys.argv[1])
 month = int(sys.argv[2])
@@ -38,12 +38,15 @@ merged['difference_iter'] = abs(merged['DD_merton'] - merged['DD_iter'])
 merged['difference_sim'] = abs(merged['DD_merton'] - merged['DD_sim'])
 print(merged.columns)
 #maybe permco too?
-merged = merged[['DD_merton', 'DD_iter', 'DD_sim', 'difference_iter', 'difference_sim', 'date', 'gvkey']] 
+merged = merged[['DD_merton', 'DD_iter', 'DD_sim', 'difference_iter', 'difference_sim', 'date', 'gvkey', 'permco', 'permno']] 
 #print("Null values:\n", merged.isnull().sum())
 print("Summary Stats:\n")
 print(merged.describe())
 print("Data Preview:\n")
 print(merged.head())
+
+max_difference_iter = merged[merged['difference_iter'] == merged['difference_iter'].max()]
+print("max diff iter:\n", max_difference_iter)
 
 max_outlier = merged[merged['DD_merton'] == merged['DD_merton'].max()]
 print("Maxoutlier DD Merton:\n", max_outlier)
@@ -54,8 +57,8 @@ print("Maxoutlier DD sim:\n", max_outlier)
 min_outlier = merged[merged['DD_sim'] == merged['DD_sim'].min()]
 print("Minoutlier DD sim:\n", min_outlier)
 
-#print("GZ_replication:", convds_df[convds_df['permco'] == 22326][['date', 'DD', 'DD_merton', 'A', 'E', 'D']])
-#print("Iter:", iter_df.loc[(iter_df['permco'] == 22326) & (iter_df['date'] == '1988-04-29'), ['date', 'DD', 'A', 'E', 'D']])
-#print("Sim:", sim_df.loc[(sim_df['permco'] == 22326) & (sim_df['date'] == '1988-04-29'), ['date', 'DD', 'A', 'E', 'D']])
+print("GZ_replication:", convds_df[convds_df['permco'] == 22326][['date', 'DD', 'DD_merton', 'A', 'E', 'D']])
+print("Iter:", iter_df.loc[(iter_df['permco'] == 22326) & (iter_df['date'] == '1988-04-29'), ['date', 'DD', 'A', 'E', 'D']])
+print("Sim:", sim_df.loc[(sim_df['permco'] == 22326) & (sim_df['date'] == '1988-04-29'), ['date', 'DD', 'A', 'E', 'D']])
 
 

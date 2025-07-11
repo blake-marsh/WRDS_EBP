@@ -398,7 +398,7 @@ run;
 
 data test_data_single;
 	set merton_raw;
-	where permco = 1603;
+	where gvkey = 5073;
 	E = mkt_cap;
 	D = face_value_debt;
 	A = E + D;
@@ -433,7 +433,7 @@ run;
 proc contents data=_convds; run;
 proc print data=_convds(obs=10); run;
 proc print data=_convds;
-	where permco= 1603;
+	where gvkey= 5073;
 run;
 
 /*proc print data=_convds; run;*/
