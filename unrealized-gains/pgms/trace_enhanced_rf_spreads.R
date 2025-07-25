@@ -6,7 +6,7 @@ library(lubridate)
 library(RPostgres)
 library(stats)
 library(parallel)
-setwd("~/unrealized-gains")
+setwd("~/WRDS_EBP/unrealized-gains")
 
 #----------------
 # Parallel setup
@@ -312,7 +312,9 @@ missing_count <- chunk[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
                                           banks = length(unique(id_rssd)))]
 missing_count[, step := paste0("Missing Spread - chunk", i)]
 obs_counts[[i]] <- missing_count
-
+list_cols <- sapply(chunk, is.list)
+print(which(list_cols))
+print(names(chunk)[list_cols])
 fwrite(chunk, output_file, sep="|", append=!first_chunk, col.names=first_chunk, na="NA")
 first_chunk <- FALSE
 rm(chunk)
