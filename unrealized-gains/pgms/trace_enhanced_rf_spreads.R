@@ -19,6 +19,8 @@ print(paste("Cores:", cores))
 # FUNCTION: coupon dates
 #-------------------------
 cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn="pmts"){
+	if (any(is.na(issue_date), is.na(maturity_date))) return (NA)
+	if (length(issue_date) == 0|| length(maturity_date)== 0) return (NA)
      
   ## Figure out the months between coupons
 
@@ -35,6 +37,7 @@ cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn
    count = 0
    repeat {
       temp = maturity_date %m-% months(cpn_freq_months*count)
+     # temp = maturity_date %m-% months(as.integer(round(cpn_freq_months*count)))
       if (temp > issue_date) {
          coupon_dates = c(coupon_dates,temp)
          count = count + 1
@@ -237,11 +240,26 @@ h15[,(c("fstub", "nstub")) := NULL]
 #df = df[which(trd_exctn_dt == as.Date('2019-01-07') & cusip_id == '46625HJZ4'),]
 #df = df[which(trd_exctn_dt == as.Date('2019-01-04') & cusip_id == '46625HJZ4'),]
 #df = df[1:20000]
-df = df[3600000:3620000,]
+#df = df[3600000:3620000,]
 #print(nrow(df))
 #print(df[3610000])
 #print(df[3600001])
 #df = df[which(zero_cpn == 1),]
+safe_cpn_dates <- function(...) {
+	tryCatch(cpn_dates(...), error = function(e) {
+	message("Error in cpn_dates():", e$message)
+	return(NA)
+})
+}
+safe_PV_calc <- function(trade_date, issue_date, maturity_date, coupon, cpn_freq, method = "continuous") {
+	out <- tryCatch(
+	PV_calc(trade_date, issue_date, maturity_date, coupon, cpn_freq, method),
+	error = function(e) NA_real_
+)
+#print(paste("error:", error, trade_date, issue_date, maturity_date, coupon, cpn_freq))
+if (is.null(out) || length(out) != 1 || is.na(out)) return(NA_real_)
+return(as.numeric(out))
+}
 
 #--------------------------------------------
 # Determine the number of payments remaining
@@ -255,19 +273,21 @@ obs_counts <- list()
 #610000
 #600000
 #620000
-chunk_size <- 10000
+chunk_size <- 100000
 num_chunks <- ceiling(nrow(df) / chunk_size)
 for (i in 1:num_chunks) {
 	print(paste("Processing chunk", i, "of", num_chunks))
 	start_row <- ((i - 1) * chunk_size) + 1
 	end_row <- min(i * chunk_size, nrow(df))
 	chunk <- df[start_row:end_row]
-	
-chunk[,nper := mcmapply(cpn_dates, offering_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
+tryCatch({	
+chunk = chunk[!is.na(trd_exctn_dt) & !is.na(offering_date) & !is.na(maturity_date) & !is.na(coupon) & !is.na(interest_frequency) & interest_frequency > 0 & maturity_date > offering_date]
 
-chunk = chunk[!is.na(trd_exctn_dt) & !is.na(offering_date) & !is.na(maturity_date) & !is.na(coupon) & !is.na(interest_frequency)]
-chunk[,price_rf := mcmapply(PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency,method="continuous", mc.cores=cores)]
-chunk[,price_rf_discrete := mcmapply(PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+chunk[,nper := mcmapply(safe_cpn_dates, offering_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
+#print(paste("bad checunk:", chunk[is.na(nper) | nper == 0][1]))
+
+chunk[,price_rf := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency,method="continuous", mc.cores=cores)]
+chunk[,price_rf_discrete := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
 
 chunk[,ytm_rf := mcmapply(get_ytm, price_rf, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
 chunk[,ytm_rf_discrete := mcmapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
@@ -289,13 +309,23 @@ missing_count <- chunk[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
                                           banks = length(unique(id_rssd)))]
 missing_count[, step := paste0("Missing Spread - chunk", i)]
 obs_counts[[i]] <- missing_count
-list_cols <- sapply(chunk, is.list)
-print(which(list_cols))
-print(names(chunk)[list_cols])
+#list_cols <- sapply(chunk, is.list)
+#print(which(list_cols))
+#print(names(chunk)[list_cols])
+
 fwrite(chunk, output_file, sep="|", append=!first_chunk, col.names=first_chunk, na="NA")
+#tryCatch({
+#}, error = function(e) {
+#	print(paste("fwrite failed on chunk", i, ":", e$message))
+#	fwrite(chunk[1:5], paste0("failed_chunk_", i, ".csv"))
+#})
+
 first_chunk <- FALSE
 rm(chunk)
 gc()
+}, error = function(e) {
+	message(paste("Error in chunk", i, ":", e$message))
+})
 }
 obs_count_all = rbindlist(obs_counts, use.names=T, fill=T)
 saveRDS(obs_count_all, "/scratch/frbkc/trace_enhanced_observation_count.rds")
