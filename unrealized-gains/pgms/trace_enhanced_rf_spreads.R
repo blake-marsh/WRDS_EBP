@@ -6,27 +6,27 @@ library(lubridate)
 library(RPostgres)
 library(stats)
 library(parallel)
+
 setwd("~/WRDS_EBP/unrealized-gains")
 
 #----------------
 # Parallel setup
 #----------------
 cores = detectCores()
-#cores = min(8, cores)
 print(paste("Cores:", cores))
 
 #-------------------------
 # FUNCTION: coupon dates
 #-------------------------
-cpn_dates <- function(issue_date, maturity_date, trade_date=NA, interest_frequency=NA, rtn="pmts"){
+cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn="pmts"){
      
   ## Figure out the months between coupons
 
-  if (is.na(interest_frequency)) { 
-    interest_frequency = 1
+  if (is.na(cpn_freq)) { 
+    cpn_freq = 1
   }
 
-   cpn_freq_months = 12/interest_frequency
+   cpn_freq_months = 12/cpn_freq
   
    ## vector to store the dates
    coupon_dates = c()
@@ -67,26 +67,21 @@ cpn_dates <- function(issue_date, maturity_date, trade_date=NA, interest_frequen
 # FUNCTION: Present value calcuation of risk-free
 # using market rates
 #----------------------------------------
-PV_calc <- function(trade_date, issue_date, maturity_date, coupon, interest_frequency, method="continuous") {
-    if (is.na(trade_date) | is.na(issue_date) | is.na(maturity_date) | is.na(coupon)) return (NA)
-    h15_trade = h15[which(date == trade_date),]
-    if (nrow(h15_trade) == 0) return (NA)
-    
+PV_calc <- function(trade_date, issue_date, maturity_date, coupon, cpn_freq, method="continuous") {
 
     ## get coupon payment 
-    if (is.na(interest_frequency)) {
+    if (is.na(cpn_freq)) {
          
 	coupon_pmt = 0
-	interest_frequency = 1
+	cpn_freq = 1
 
     } else {
 
-       coupon_pmt = 100*(coupon/100)/interest_frequency
+       coupon_pmt = 100*(coupon/100)/cpn_freq
     }
     
     ## determine coupon dates
-    d = cpn_dates(issue_date, maturity_date, trade_date=trade_date, interest_frequency=interest_frequency, rtn="coupon_dates") 
-    if (length(d) == 0 || is.null(d)) return (NA)
+    d = cpn_dates(issue_date, maturity_date, trade_date=trade_date, cpn_freq=cpn_freq, rtn="coupon_dates") 
     
     # number of days to each coupon payment
     # from trade date
@@ -114,9 +109,9 @@ PV_calc <- function(trade_date, issue_date, maturity_date, coupon, interest_freq
 
         ## coupon present-value
         if (method == "discrete") {
-            coupon_PV = coupon_pmt/((1+r/interest_frequency)^nper)
+            coupon_PV = coupon_pmt/((1+r/cpn_freq)^nper)
         } else if (method == "continuous") {
-            coupon_PV = coupon_pmt/exp((r/interest_frequency)*nper)
+            coupon_PV = coupon_pmt/exp((r/cpn_freq)*nper)
         } 
         PV = PV + coupon_PV
     }
@@ -124,23 +119,23 @@ PV_calc <- function(trade_date, issue_date, maturity_date, coupon, interest_freq
     ## This assumes the last coupon 
     ## is paid on the maturity date
     if (method == "discrete") {
-       PV = PV + (100/(1+r/interest_frequency)^nper)
+       PV = PV + (100/(1+r/cpn_freq)^nper)
     } else if (method == "continuous") {
-       PV = PV + (100/(exp((r/interest_frequency)*nper)))
+       PV = PV + (100/(exp((r/cpn_freq)*nper)))
     }
 
     ## price as percent of face value
     price = PV/100*100
     
     #return(list('PV' = PV, 'price' = price))
-    return(as.numeric(price))
+    return(price)
 }
 
 #----------------------------------------------
 # FUNCTION: solve for YTM
 #    for zero coupon pmts = years to maturity
 #----------------------------------------------
-ytm_func <- function(r, PV, nper, coupon, interest_frequency, method="continuous") {
+ytm_func <- function(r, PV, nper, coupon, cpn_freq, method="continuous") {
 
   if (is.na(coupon) | coupon == 0){
      if (method == "discrete") {
@@ -151,17 +146,17 @@ ytm_func <- function(r, PV, nper, coupon, interest_frequency, method="continuous
 
   } else {
 
-     c = 100*(coupon/100)/interest_frequency 
+     c = 100*(coupon/100)/cpn_freq 
      if (method == "discrete") {
-         price = 100/(1+r/interest_frequency)^nper
+         price = 100/(1+r/cpn_freq)^nper
          for (i in seq(nper)){
-           coupon_PV = c/((1+r/interest_frequency)^i)
+           coupon_PV = c/((1+r/cpn_freq)^i)
            price = price + coupon_PV
          }
      } else if (method == "continuous") {
-         price = 100/exp((r/interest_frequency)*nper)
+         price = 100/exp((r/cpn_freq)*nper)
          for (i in seq(nper)){
-           coupon_PV = c/exp((r/interest_frequency)*i)
+           coupon_PV = c/exp((r/cpn_freq)*i)
            price = price + coupon_PV
          }
       }
@@ -188,10 +183,10 @@ duration_macaulay <- function(maturity, coupon_rate, ytm, principal, freq) {
 duration_investopedia <- duration_macaulay(3, 0.06, 0.06, 1000, 2)
 print(paste("Macaulay duration:", duration_investopedia))
 
-get_ytm <- function(PV, nper, coupon, interest_frequency, method="continuous") {
+get_ytm <- function(PV, nper, coupon, cpn_freq, method="continuous") {
 
  r = tryCatch(
-    uniroot(f=ytm_func, interval=c(1E-15, 10), PV=PV, nper=nper, coupon=coupon, interest_frequency=interest_frequency, method=method, tol=1E-6)$root, 
+    uniroot(f=ytm_func, interval=c(1E-15, 10), PV=PV, nper=nper, coupon=coupon, cpn_freq=cpn_freq, method=method, tol=1E-6)$root, 
     error = function(e) { return(NA) }
  )
  return(r)
@@ -203,15 +198,9 @@ get_ytm <- function(PV, nper, coupon, interest_frequency, method="continuous") {
 
 start.time = Sys.time()
 
-df = readRDS("/scratch/frbkc/trace_enhanced_sample.rds")
+df = readRDS("./data/trace_enhanced_sample.rds")
 df[, time_to_maturity := as.numeric(maturity_date - trd_exctn_dt) / 365]
 df[, interest_frequency := as.numeric(interest_frequency)]
-
-#df_chunks = split(df, cut(1:nrow(df), breaks = cores, labels = FALSE))
-#df[is.na(offering_date) | is.na(maturity_date) | is.na(trd_exctn_dt) | is.na(coupon), .N]
-#df[coupon == 0 | is.na(coupon), .N]
-#str(df[, .(trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, price)])
-
 end.time = Sys.time()
 
 print(paste("trace load time:", end.time - start.time))
@@ -241,35 +230,23 @@ h15[,fstub := substring(maturity,6,6)]
 h15[,nstub := as.numeric(substring(maturity,4,5))]
 h15[,days := ifelse(fstub == "m", floor(nstub/12*365), nstub*365)]
 h15[,(c("fstub", "nstub")) := NULL]
-#any(df$trd_exctn_dt %in% h15$date)
 
 #----------------
 # Sample data
 #----------------
 #df = df[which(trd_exctn_dt == as.Date('2019-01-07') & cusip_id == '46625HJZ4'),]
 #df = df[which(trd_exctn_dt == as.Date('2019-01-04') & cusip_id == '46625HJZ4'),]
-#print(nrow(df))
+#df = df[1:20000]
 df = df[3600000:3620000,]
+#print(nrow(df))
+#print(df[3610000])
+#print(df[3600001])
 #df = df[which(zero_cpn == 1),]
 
-safe_PV_calc <- function(trade_date, issue_date, maturity_date, coupon, cpn_freq, method = "continuous") {
-	out <- tryCatch(
-	PV_calc(trade_date, issue_date, maturity_date, coupon, cpn_freq, method),
-	error = function(e) NA_real_
-)
-#print(paste("error:", error, trade_date, issue_date, maturity_date, coupon, cpn_freq))
-if (is.null(out) || length(out) != 1 || is.na(out)) return(NA_real_)
-return(as.numeric(out))
-}
-#bad_rows <- which(sapply(1:nrow(df), function(i) {
-#	tryCatch({
-#		is.na(PV_calc(df$trd_exctn_dt[i], df$offering_date[i], df$maturity_date[i], df$coupon[i], df$interest_frequency[i], method="continuous"))
-#}, error = function(e) TRUE)
-#}))
-#df[bad_rows]
 #--------------------------------------------
 # Determine the number of payments remaining
 #--------------------------------------------
+
 output_file <- "/scratch/frbkc/trace_enhanced_rf_spreads.psv"
 count_file <- "./data/trace_enhanced_observation_count.rds"
 first_chunk <- TRUE
@@ -289,8 +266,8 @@ for (i in 1:num_chunks) {
 chunk[,nper := mcmapply(cpn_dates, offering_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
 
 chunk = chunk[!is.na(trd_exctn_dt) & !is.na(offering_date) & !is.na(maturity_date) & !is.na(coupon) & !is.na(interest_frequency)]
-chunk[,price_rf := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency,method="continuous", mc.cores=cores)]
-chunk[,price_rf_discrete := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+chunk[,price_rf := mcmapply(PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency,method="continuous", mc.cores=cores)]
+chunk[,price_rf_discrete := mcmapply(PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
 
 chunk[,ytm_rf := mcmapply(get_ytm, price_rf, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
 chunk[,ytm_rf_discrete := mcmapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
@@ -320,152 +297,6 @@ first_chunk <- FALSE
 rm(chunk)
 gc()
 }
-
-start.time = Sys.time()
-#df[,nper := mcmapply(cpn_dates, offering_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
-end.time = Sys.time()
-#print(paste("nper time:", end.time - start.time))
-#df[nper == 0 | is.na(nper), .N]
-
-#saveRDS(df, "/scratch/frbkc/trace_enhanced_sample_w_payments.rds")
-#double check this line!
-
-
-#----------------------------------------------------
-# Calculate present value of the risk free synthetic
-#----------------------------------------------------
-start.time = Sys.time()
-#df = df[!is.na(trd_exctn_dt) & !is.na(offering_date) & !is.na(maturity_date) & !is.na(coupon) & !is.na(interest_frequency)]
-#df[,price_rf := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="continuous", mc.cores=cores)]
-#calc_price_rf_chunk = function(chunk, h15_local) {
-#	chunk[, price_rf := mapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date,
-#				coupon, interest_frequency, MoreArgs = list(method = "continuous", h15_local = h15_local))]
-#return(chunk[, .(price_rf)])
-#}
-end.time = Sys.time()
-print(paste("RF continuous pricing time:", end.time - start.time))
-
-start.time = Sys.time()
-#df[,price_rf_discrete := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
-#calc_price_rf_discrete_chunk <- function(chunk, h15_local) {
-#	chunk[, price_rf_discrete := mapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date,
-#					coupon, interest_frequency,
-#					MoreArgs = list(method = "discrete", h15_local = h15_local))]
-#	return(chunk[, .(price_rf_discrete)])
-
-#}
-end.time = Sys.time()
-print(paste("RF discrete pricing time:", end.time - start.time))
-
-#df[is.na(price_rf) | is.na(price_rf_discrete), .N]
-
-#-------------------------
-# Solve for risk-free YTM
-#-------------------------
-start.time = Sys.time()
-#df[,ytm_rf := mcmapply(get_ytm, price_rf, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
-#calc_ytm_rf_chunk <- function(chunk) {
-#	chunk[, ytm_rf := mapply(get_ytm, price_rf, nper, coupon, interest_frequency,
-#			MoreArgs = list(method = "continuous"))]
-#	return(chunk[, .(ytm_rf)])
-#}
-end.time = Sys.time()
-print(paste("Risk-free continuous YTM time:", end.time - start.time))
-
-start.time = Sys.time()
-#df[,ytm_rf_discrete := mcmapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
-#calc_ytm_rf_discrete_chunk <- function(chunk) {
-#	chunk[, ytm_rf_discrete := mapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, MoreArgs = list(method = "discrete"))]
-#	return(chunk[, .(ytm_rf_discrete)])
-#}
-end.time = Sys.time()
-print(paste("Risk-free discrete YTM time:", end.time - start.time))
-
-#----------------------
-# Solve for trade YTM
-#---------------------
-start.time = Sys.time()
-#df[,ytm_trade := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
-#calc_ytm_trade_chunk <- function(chunk) {
-#	chunk[, ytm_trade := mapply(get_ytm, price, nper, coupon, interest_frequency, MoreArgs = list(method = "continuous"))]
-#	return(chunk[, .(ytm_trade)])
-#}
-end.time = Sys.time()
-print(paste("Trade continuous YTM time:", end.time - start.time))
-
-start.time = Sys.time()
-#df[,ytm_trade_discrete := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
-#calc_ytm_trade_discrete_chunk <- function(chunk) {
-#	chunk[, ytm_trade_discrete := mapply(get_ytm, price, nper, coupon, interest_frequency, MoreArgs = list(method = "discrete"))]
-#	return(chunk[, .(ytm_trade_discrete)])
-#}
-end.time = Sys.time()
-print(paste("Trade discrete YTM time:", end.time - start.time))
-
-
-#Macaulay Duration
-#df[, duration_mac := mcmapply(duration_macaulay, 
-#			      maturity = time_to_maturity,
-#		      coupon_rate = coupon / 100,
-#		      ytm = ytm_rf,
-#		      principal = principal_amt,
-#		      freq = interest_frequency,
-#			      mc.cores = cores)]
-#calc_duration <- function(chunk) {
-#	chunk[, duration_mac := mapply(duration_macaulay, maturity = time_to_maturity, coupon_rate = coupon / 100, ytm = ytm_rf, principal = principal_amt, freq = interest_frequency)]
-#	return (chunk[, .(duration_mac)])
-#}
-#cl <- makeCluster(cores)
-#clusterExport(cl, varlist = c("safe_PV_calc", "cpn_dates", "get_ytm", "ytm_func"))
-#clusterEvalQ(cl, {
-#	library(data.table)
-#	library(lubridate)
-#})
-#results_price_rf <- clusterMap(cl, calc_price_rf_chunk, df_chunks, MoreArgs= list(h15_local = h15))
-#results_price_rf_discrete <- clusterMap(cl, calc_price_rf_discrete_chunk, df_chunks, MoreArgs= list(h15_local = h15))
-#results_ytm_rf <- clusterMap(cl, calc_ytm_rf_chunk, df_chunks)
-#results_ytm_rf_discrete <- clusterMap(cl, calc_ytm_rf_discrete_chunk, df_chunks)
-#results_ytm_trade <- clusterMap(cl, calc_ytm_trade_chunk, df_chunks)
-#results_ytm_trade_discrete <- clusterMap(cl, calc_ytm_trade_discrete_chunk, df_chunks)
-#results_duration <- clusterMap(cl, calc_duration, df_chunks)
-
-#stopCluster(cl)
-
-#df[, price_rf := unlist(results_price_rf, use.names = FALSE)] etc. 
-
-#-------------------
-# calculate spreads
-#-------------------
-
-## spreads from reported TRACE yields
-#df[,rf_spread := 100*100*(yield/100 - ytm_rf)]
-#df[,rf_spread_discrete := 100*100*(yield/100 - ytm_rf_discrete)]
-
-## spreads with calculate yield from TRACE price
-#df[,rf_spread_recalc := 100*100*(ytm_trade - ytm_rf)]
-#df[,rf_spread_recalc_discrete := 100*100*(ytm_trade_discrete - ytm_rf_discrete)]
-
-#--------------------------------------
-# Count obs with missing yield spreads
-#--------------------------------------
-
-#obs_count = readRDS("./data/trace_enhanced_observation_count.rds")
-
-#missing_count = df[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
-#                                          CUSIPs = length(unique(cusip_id)),
-#                                          banks = length(unique(id_rssd)))]
-#missing_count[,step := "Missing Spread"]
-
 obs_count_all = rbindlist(obs_counts, use.names=T, fill=T)
 saveRDS(obs_count_all, "/scratch/frbkc/trace_enhanced_observation_count.rds")
 print(obs_count_all)
-
-
-#-------------
-# Export data
-#-------------
-#saveRDS(df, "/scratch/frbkc/trace_enhanced_rf_spreads.rds")
-#write.table(df, "/scratch/frbkc/trace_enhanced_rf_spreads.psv", sep="|", row.names=F, na="")
-
-
-
