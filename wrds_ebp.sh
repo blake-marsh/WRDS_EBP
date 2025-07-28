@@ -1,7 +1,7 @@
 #!/bin/bash
 #$ -cwd
 
-#$ -N compare
+#$ -N wrds_ebp
 #$ -pe onenode 8
 #$ -l m_mem_free=6G
 

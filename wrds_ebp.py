@@ -2,10 +2,56 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 
+#Get redeemable merged in
 iter_df = pd.read_csv("./test_iter_output_cusip.txt", sep="|")
 vars_needed = ['DD', 'date', 'cusip']
 iter_df = iter_df.dropna(subset=vars_needed)
 trace_fisd = pd.read_csv("/scratch/frbkc/trace_enhanced_rf_spreads.psv", sep="|")
+trace_fisd_plus = pd.read_csv("/scratch/frbkc/trace_enhanced_with_fisd_characteristics.psv", sep="|")
+key=['cusip_id', 'bloomberg_identifier', 'trd_exctn_dt', 'bond_sym_id']
+lookup = (trace_fisd_plus.groupby(key)['redeemable'].first())
+trace_fisd['redeemable'] = trace_fisd.set_index(key).index.map(lookup)
+
+#merge on cusip and trade date. 
+#trace_fisd = trace_fisd.rename(columns={'cusip6':'cusip'})
+trace_fisd['cusip'] = trace_fisd['cusip_id'].str[:8] #maybe use in logic later?
+
+iter_df['date'] = pd.to_datetime(iter_df['date'])
+iter_df['month_year'] = iter_df['date'].dt.to_period('M')
+dd_last = (
+    iter_df
+    .sort_values(['cusip', 'date'])
+    .groupby(['cusip', 'month_year'])
+    .tail(1))
+
+trace_fisd['trd_exctn_dt'] = pd.to_datetime(trace_fisd['trd_exctn_dt'])
+trace_fisd['month_year'] = trace_fisd['trd_exctn_dt'].dt.to_period('M')
+
+
+print("--------------------------------------------------------")
+print(trace_fisd['cusip'].dtype, dd_last['cusip'].dtype)
+print(trace_fisd['cusip'].head())
+print(dd_last['cusip'].head())
+print(trace_fisd['trd_exctn_dt'].dt.to_period('M').head())
+print(dd_last['date'].dt.to_period('M').head())
+print("--------------------------------------------------------")
+
+merged = trace_fisd.merge(
+    dd_last[['cusip', 'month_year', 'DD']],
+    on=['cusip', 'month_year'],
+    how='left')
+print("with dd merge shape:", merged.shape)
+print(merged.keys())
+
+#filtered_iter = iter_df[(iter_df['date'].dt.year == year) & (iter_df['date'].dt.month == month)]
+#filtered_sim = sim_df[(sim_df['date'].dt.year == year) & (sim_df['date'].dt.month == month)]
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+print(merged[:3])
+merged = merged[merged['DD'].notna()]
+print("no na dd", merged.shape)
+
+print(mistake)
 vars_needed = ['cusip_id', 'cusip6', 'principal_amt', 'offering_date', 'trd_exctn_dt', 'coupon', 'redeemable', 'coupon_type', 'rf_spread', 'rf_spread_discrete', 'rf_spread_recalc', 'rf_spread_recalc_discrete']
 trace_fisd = trace_fisd.dropna(subset=vars_needed)
 
