@@ -3,19 +3,20 @@ import numpy as np
 import statsmodels.api as sm
 
 #Get redeemable merged in
-iter_df = pd.read_csv("./test_iter_output_cusip.txt", sep="|")
-vars_needed = ['DD', 'date', 'cusip']
-iter_df = iter_df.dropna(subset=vars_needed)
-trace_fisd = pd.read_csv("/scratch/frbkc/trace_enhanced_rf_spreads.psv", sep="|")
-trace_fisd_plus = pd.read_csv("/scratch/frbkc/trace_enhanced_with_fisd_characteristics.psv", sep="|")
-key=['cusip_id', 'bloomberg_identifier', 'trd_exctn_dt', 'bond_sym_id']
-lookup = (trace_fisd_plus.groupby(key)['redeemable'].first())
-trace_fisd['redeemable'] = trace_fisd.set_index(key).index.map(lookup)
+iter_df = pd.read_csv("./test_iter_cusip_2020_2025.txt", sep="|")
+#print("AHHH:", iter_df['DD'].unique)
+#trace_fisd = pd.read_csv("/scratch/frbkc/trace_enhanced_rf_spreads.psv", sep="|")
+#trace_fisd_plus = pd.read_csv("/scratch/frbkc/trace_enhanced_with_fisd_characteristics.psv", sep="|")
+#key=['cusip_id', 'bloomberg_identifier', 'trd_exctn_dt', 'bond_sym_id']
+#lookup = (trace_fisd_plus.groupby(key)['redeemable'].first())
+#trace_fisd['redeemable'] = trace_fisd.set_index(key).index.map(lookup)
+#trace_fisd.to_csv("/scratch/frbkc/trace_fisd_full.psv", sep="|", index=False)
+trace_fisd = pd.read_csv("/scratch/frbkc/trace_fisd_full.psv", sep="|")
+
 
 #merge on cusip and trade date. 
 #trace_fisd = trace_fisd.rename(columns={'cusip6':'cusip'})
 trace_fisd['cusip'] = trace_fisd['cusip_id'].str[:8] #maybe use in logic later?
-
 iter_df['date'] = pd.to_datetime(iter_df['date'])
 iter_df['month_year'] = iter_df['date'].dt.to_period('M')
 dd_last = (
@@ -36,6 +37,20 @@ print(trace_fisd['trd_exctn_dt'].dt.to_period('M').head())
 print(dd_last['date'].dt.to_period('M').head())
 print("--------------------------------------------------------")
 
+print("DD_last shape:",dd_last.shape)
+print("trace_fisd shape:", trace_fisd.shape)
+
+common_cusip = set(trace_fisd['cusip']) & set(iter_df['cusip'])
+print("Common cusip count:", len(common_cusip))
+common_month_year = set(trace_fisd['month_year']) & set(dd_last['month_year'])
+print("Common month year count:", len(common_month_year))
+
+print("TRACE unique lengths:", trace_fisd['cusip'].str.len().value_counts())
+print("DD unique lengths:", dd_last['cusip'].str.len().value_counts())
+
+print("TRACE fisd month year range:", trace_fisd['month_year'].min(), "to", trace_fisd['month_year'].max())
+print("DD month year range:", dd_last['month_year'].min(), "to", dd_last['month_year'].max())
+
 merged = trace_fisd.merge(
     dd_last[['cusip', 'month_year', 'DD']],
     on=['cusip', 'month_year'],
@@ -45,9 +60,9 @@ print(merged.keys())
 
 #filtered_iter = iter_df[(iter_df['date'].dt.year == year) & (iter_df['date'].dt.month == month)]
 #filtered_sim = sim_df[(sim_df['date'].dt.year == year) & (sim_df['date'].dt.month == month)]
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-print(merged[:3])
+#pd.set_option('display.max_rows', None)
+#pd.set_option('display.max_columns', None)
+#print(merged[:3])
 merged = merged[merged['DD'].notna()]
 print("no na dd", merged.shape)
 
