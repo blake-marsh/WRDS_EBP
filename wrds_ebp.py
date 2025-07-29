@@ -16,7 +16,18 @@ trace_fisd = pd.read_csv("/scratch/frbkc/trace_fisd_full.psv", sep="|")
 
 #merge on cusip and trade date. 
 #trace_fisd = trace_fisd.rename(columns={'cusip6':'cusip'})
-trace_fisd['cusip'] = trace_fisd['cusip_id'].str[:8] #maybe use in logic later?
+trace_fisd['cusip'] = trace_fisd['cusip_id'].str[:6] #maybe use in logic later?
+iter_df['cusip'] = iter_df['cusip'].str[:6] #maybe use in logic later?
+trace_fisd['cusip'] = trace_fisd['cusip'].str.upper().str.strip()
+iter_df['cusip'] = iter_df['cusip'].str.upper().str.strip()
+
+print("TRACE FISD CUSIP:", trace_fisd['cusip'])
+print("DD CUSIP:", iter_df['cusip'])
+
+common_cusip = set(trace_fisd['cusip']) & set(iter_df['cusip'])
+print("Common cusip count:", len(common_cusip))
+
+
 iter_df['date'] = pd.to_datetime(iter_df['date'])
 iter_df['month_year'] = iter_df['date'].dt.to_period('M')
 dd_last = (
@@ -29,63 +40,60 @@ trace_fisd['trd_exctn_dt'] = pd.to_datetime(trace_fisd['trd_exctn_dt'])
 trace_fisd['month_year'] = trace_fisd['trd_exctn_dt'].dt.to_period('M')
 
 
-print("--------------------------------------------------------")
+'''print("--------------------------------------------------------")
 print(trace_fisd['cusip'].dtype, dd_last['cusip'].dtype)
 print(trace_fisd['cusip'].head())
 print(dd_last['cusip'].head())
 print(trace_fisd['trd_exctn_dt'].dt.to_period('M').head())
 print(dd_last['date'].dt.to_period('M').head())
-print("--------------------------------------------------------")
+print("--------------------------------------------------------")'''
 
-print("DD_last shape:",dd_last.shape)
-print("trace_fisd shape:", trace_fisd.shape)
-
-common_cusip = set(trace_fisd['cusip']) & set(iter_df['cusip'])
-print("Common cusip count:", len(common_cusip))
 common_month_year = set(trace_fisd['month_year']) & set(dd_last['month_year'])
 print("Common month year count:", len(common_month_year))
 
-print("TRACE unique lengths:", trace_fisd['cusip'].str.len().value_counts())
-print("DD unique lengths:", dd_last['cusip'].str.len().value_counts())
+#print("TRACE unique lengths:", trace_fisd['cusip'].str.len().value_counts())
+#print("DD unique lengths:", dd_last['cusip'].str.len().value_counts())
 
-print("TRACE fisd month year range:", trace_fisd['month_year'].min(), "to", trace_fisd['month_year'].max())
-print("DD month year range:", dd_last['month_year'].min(), "to", dd_last['month_year'].max())
+#print("TRACE fisd month year range:", trace_fisd['month_year'].min(), "to", trace_fisd['month_year'].max())
+#print("DD month year range:", dd_last['month_year'].min(), "to", dd_last['month_year'].max())
+print("dd_last shape:", dd_last.shape)
+print("trace_fisd shape:", trace_fisd.shape)
 
 merged = trace_fisd.merge(
     dd_last[['cusip', 'month_year', 'DD']],
     on=['cusip', 'month_year'],
     how='left')
-print("with dd merge shape:", merged.shape)
-print(merged.keys())
+print("Merged shape:", merged.shape)
+#print("with dd merge shape:", merged.shape)
+#print(merged.keys())
 
 #filtered_iter = iter_df[(iter_df['date'].dt.year == year) & (iter_df['date'].dt.month == month)]
 #filtered_sim = sim_df[(sim_df['date'].dt.year == year) & (sim_df['date'].dt.month == month)]
-#pd.set_option('display.max_rows', None)
-#pd.set_option('display.max_columns', None)
-#print(merged[:3])
-merged = merged[merged['DD'].notna()]
-print("no na dd", merged.shape)
-
-print(mistake)
-vars_needed = ['cusip_id', 'cusip6', 'principal_amt', 'offering_date', 'trd_exctn_dt', 'coupon', 'redeemable', 'coupon_type', 'rf_spread', 'rf_spread_discrete', 'rf_spread_recalc', 'rf_spread_recalc_discrete']
-trace_fisd = trace_fisd.dropna(subset=vars_needed)
-
-trace_fisd = trace_fisd.rename(columns={'cusip_id': 'cusip'})
-df = trace_fisd.merge(iter_df, on=['cusip'], suffixes=('_trace', '_iter'))
-
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
+#print(merged[:3])
+
+df = merged[merged['DD'].notna()]
+print("no na dd", df.shape)
+df = df[df['redeemable'].notna()]
+print("no redeemable dd", df.shape)
+print(df[:20])
+
+#vars_needed = ['cusip_id', 'cusip6', 'principal_amt', 'offering_date', 'trd_exctn_dt', 'coupon', 'redeemable', 'coupon_type', 'rf_spread', 'rf_spread_discrete', 'rf_spread_recalc', 'rf_spread_recalc_discrete']
+#trace_fisd = trace_fisd.dropna(subset=vars_needed)
+
+#trace_fisd = trace_fisd.rename(columns={'cusip_id': 'cusip'})
+#df = trace_fisd.merge(iter_df, on=['cusip'], suffixes=('_trace', '_iter'))
 
 df['trd_exctn_dt'] = pd.to_datetime(df['trd_exctn_dt'])
 df['offering_date'] = pd.to_datetime(df['offering_date'])
-df['date'] = pd.to_datetime(df['date'])
 
 df['age'] = (df['trd_exctn_dt'] - df['offering_date']).dt.days
 
 df['call'] = df['redeemable'].map({'Y': 1, 'N': 0}).astype(int)
 
-df['lspr'] = np.log(df['spr'])
-df['lduration'] = np.log(df['durati5on'])
+df['lspr'] = np.log(df['rf_spread'])
+df['lduration'] = np.log(df['duration_mac'])
 df['lparvalue'] = np.log(df['principal_amt'])
 df['lcoupon'] = np.log(df['coupon'])
 df['lage'] = np.log(df['age'])
@@ -108,7 +116,10 @@ df['lspr_p'] = model.predict(X)
 sig2 = model.mse_resid
 df['spr_p'] = np.exp(df['lspr_p'] + 0.5*sig2)
 
-df['ebp_oa'] = df['spr'] - df['spr_p']
+df['ebp_oa'] = df['rf_spread'] - df['spr_p']
+
+print(df['ebp_oa'][:100])
+
 
 
 

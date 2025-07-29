@@ -1,6 +1,6 @@
 import sys
 old_stdout = sys.stdout
-log_file = open("./logfiles/merton_DD_WRDS_1970_1989.log","w")
+log_file = open("./logfiles/merton_DD_WRDS_2020_2025.log","w")
 sys.stdout = log_file
 
 # Log time stamp
@@ -16,6 +16,8 @@ from scipy.stats import norm
 from scipy.optimize import fsolve
 from scipy.optimize import root
 
+from scipy.optimize import least_squares
+from scipy.optimize import broyden1
 os.chdir("./data/compustat/policy/")
 
 #---------------------
@@ -50,6 +52,7 @@ def sim_process(df, T=1.0):
     ## Initialize variables
     row = df.iloc[-1]
     gvkey = row.gvkey; fyr = row.fyr; permco = row.permco; permno = row.permno; date = row.date.date(); gsubind = row.gsubind; fic = row.fic
+    cusip = row.cusip
     convergence = False
 
     ## sort dataframe
@@ -96,7 +99,7 @@ def sim_process(df, T=1.0):
     result = {"gvkey":gvkey, "fyr":fyr, "permco":permco, "permno":permno, "date":date, "gsubind":gsubind, "fic":fic,
               "A":row.A, "E":row.E, "D":row.D, "rf":row.rf, "DD":DD, "PD":PD,
               "V":fsolve_out[0], "sigma_V":fsolve_out[1],  "convergence":convergence, 
-              "iteration_time":iteration_time}
+              "iteration_time":iteration_time, "cusip": cusip}
     return result
      
 #------------------------------
@@ -115,7 +118,7 @@ def merton_iter(V, sigma_V, E, sigma_E, D, rf, T):
 
 ## two step process takes time series inputs by firm
 ## df must have: gvkey, date, A, D, E, rf
-def two_step_process(df, T, max_iter=10, tol=1E-4):
+def two_step_process(df, T, max_iter=10, tol=0.001):
     ## Initialize variables
     last_row = df.iloc[-1]
     df = df.sort_values(['gvkey', 'fyr', 'permco', 'permno', 'date'])
@@ -126,6 +129,7 @@ def two_step_process(df, T, max_iter=10, tol=1E-4):
         sigma_V = 0.01
     df['V'] = np.nan
     gvkey = last_row.gvkey; fyr = last_row.fyr; permco = last_row.permco; permno = last_row.permno; date = last_row.date.date(); gsubind = last_row.gsubind; fic=last_row.fic
+    cusip = last_row.cusip
     #print("Processing row:", gvkey, fyr, permco, permno, date)
     num_iter = 0; converge_check= np.nan; convergence = False; iteration_time = np.nan
 
@@ -174,7 +178,7 @@ def two_step_process(df, T, max_iter=10, tol=1E-4):
               "A":df.A, "E":df.E, "D":df.D, "rf":df.rf, 
               "DD":DD, "PD":PD, "V":df.V, "sigma_V":sigma_V, "mean_V":mean_V, 
               "convergence":convergence, "iters":num_iter, 
-              "converge_check":converge_check, "iteration_time":iteration_time}
+              "converge_check":converge_check, "iteration_time":iteration_time, "cusip":cusip}
     return result
 
 #-------------------------------------
@@ -182,7 +186,7 @@ print("Preparing raw data..." + "\n")
 #-------------------------------------
 
 ## read the raw data file
-df = pd.read_csv("/scratch/frbkc/merton_DD_data_WRDS_1970_1989.txt", sep="|")
+df = pd.read_csv("/scratch/frbkc/merton_DD_data_WRDS_2020_2025.txt", sep="|")
 df['date'] = pd.to_datetime(df.date)
 
 ## check duplicates
@@ -221,19 +225,19 @@ df = df.merge(market_dates, on="date", how="left")
 # Chunk the data by gvkey, fyr, permco, permno combination
 #----------------------------------------------------------
 
-#df_by_groups = df.groupby(['gvkey', 'fyr', 'permco', 'permno'])
-#df_by_groups = [i[1] for i in df_by_groups]
-test_df = df[(df.gvkey >= 5073) & (df.gvkey <= 5080) & (df.date.dt.year == 1988) & (df.date.dt.month == 4)]
+df_by_groups = df.groupby(['gvkey', 'fyr', 'permco', 'permno'])
+df_by_groups = [i[1] for i in df_by_groups]
+'''test_df = df[(df.gvkey == 5073) & (df.date.dt.year == 1988) & (df.date.dt.month == 4)]
 
 test_date = test_df['date'].max()
 lag_date = test_df.loc[test_df.date == test_date, 'date_lag_250'].iloc[0]
-sample = df[(df.gvkey >= 5073) & (df.gvkey <= 5080) & (df.date > lag_date) & (df.date <= test_date)]
+sample = df[(df.gvkey == 5073) & (df.date > lag_date) & (df.date <= test_date)]
 
 df_by_groups = [sample]
 
 print("Sample shape:", sample.shape)
 print(sample.keys())
-print(sample.head())
+print(sample.head())'''
 '''print("Date range:", sample.date.min(), "to", sample.date.max())
 print("Running two_step_process()")
 result = two_step_process(sample, T=1.0)
@@ -274,7 +278,7 @@ print("Simultaneous processing done.")
 
 ## get results and write output
 results_sim = pd.concat([p.get()for p in output])
-results_sim.to_csv("../../../test_sim_output.txt", sep="|", index=False)
+results_sim.to_csv("../../../test_sim_output_cusip.txt", sep="|", index=False)
 
 #--------------------------------------
 print("""Estimate DD for all gvkeys\n 
@@ -303,17 +307,19 @@ def iter_by_group(sample):
 ## parallel run over samples
 num_cpus = mp.cpu_count()
 pool = mp.Pool(processes=num_cpus)
-t1 = time.time()
-#output = [pool.apply_async(iter_by_group, args=(sample,)) for sample in df_by_groups]
-output = [iter_by_group(sample) for sample in df_by_groups]
-t2 = time.time()
-print("Total Time:", t2 - t1)
+#t1 = time.time()
+output = [pool.apply_async(iter_by_group, args=(sample,)) for sample in df_by_groups]
+#output = [iter_by_group(sample) for sample in df_by_groups]
+#t2 = time.time()
+#print("Total Time:", t2 - t1)
 print("Two step processing done.")
 
 ## get results and write output
-results_iter = pd.concat([p for p in output])
-#results_iter = pd.concat([p.get() for p in output])
-results_iter.to_csv("../../../test_iter_output_fast.txt", sep="|", index=False)
+#results_iter = pd.concat([p for p in output])
+results_iter = pd.concat([p.get() for p in output])
+print(results_iter['DD'])
+print(results_iter.head())
+results_iter.to_csv("../../../test_iter_cusip_2020_2025.txt", sep="|", index=False)
 
 #------------------------------------------------------
 print("Log closed on " + str(datetime.datetime.now()))

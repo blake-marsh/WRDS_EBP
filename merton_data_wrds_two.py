@@ -1,6 +1,6 @@
 import sys
 old_stdout = sys.stdout
-log_file = open("./logfiles/merton_DD_data_WRDS_1970_1989.log","w")
+log_file = open("./logfiles/merton_DD_data_WRDS_2020_2025.log","w")
 sys.stdout = log_file
 
 # Log time stamp
@@ -23,13 +23,13 @@ os.chdir("./data/compustat/policy/")
 ## now merge between dates
 co_ifndq = pd.read_parquet("./co_ifndq.parquet")
 crsp = pd.read_parquet("./crsp.parquet")
-col_needed = ['date', 'gvkey', 'permco', 'permno', 'datadate', 'conm', 'gsubind',
+col_needed = ['date', 'gvkey', 'permco', 'permno', 'cusip', 'datadate', 'conm', 'gsubind',
             'fyr', 'fic', 'mkt_cap', 'assets', 'face_value_debt', 'tyd01y']
 
 first_chunk = True
 
 n = 50000
-output_file = "/scratch/frbkc/merton_DD_data_WRDS_1970_1989.txt"
+output_file = "/scratch/frbkc/merton_DD_data_WRDS_2020_2025.txt"
 for i in range(0, crsp.shape[0], n):
     crsp_chunk = crsp.iloc[i:i + n].copy()
     merged_chunk = crsp_chunk.merge(co_ifndq, on='gvkey', how='inner')

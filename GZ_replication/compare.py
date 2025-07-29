@@ -2,9 +2,10 @@ import pandas as pd
 import sys
 
 convds_df = pd.read_csv("/scratch/frbkc/convds_output.csv")
-iter_df = pd.read_csv("/scratch/frbkc/merton_iterated_WRDS_1970_1989.txt", sep="|")
-#sim_df = pd.read_csv("../test_sim_output.txt", sep="|")
-sim_df = pd.read_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|")
+#iter_df = pd.read_csv("/scratch/frbkc/merton_iterated_WRDS_1970_1989.txt", sep="|")
+iter_df = pd.read_csv("../test_iter_output_cusip.txt", sep="|")
+sim_df = pd.read_csv("../test_sim_output.txt", sep="|")
+#sim_df = pd.read_csv("/scratch/frbkc/merton_simultaneous_WRDS_1970_1989.txt", sep="|")
 
 year = int(sys.argv[1])
 month = int(sys.argv[2])

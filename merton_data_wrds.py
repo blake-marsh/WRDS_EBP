@@ -1,6 +1,6 @@
 import sys
 old_stdout = sys.stdout
-log_file = open("./logfiles/merton_DD_data_WRDS_1970_1989.log","w")
+log_file = open("./logfiles/merton_DD_data_WRDS_2010_2025.log","w")
 sys.stdout = log_file
 
 # Log time stamp
@@ -36,6 +36,7 @@ db = wrds.Connection()
 # From CRSP data 
 # with GVKEY from CCM
 #----------------------
+#a.cusip
 query = """ SELECT a.*, b.htick, b.hcomnam, b.hshrcd, b.hnaics, c.gvkey,
                    abs(a.prc)*a.shrout/1E3 as mkt_cap
             FROM crspq.dsf62 as a
@@ -49,7 +50,7 @@ query = """ SELECT a.*, b.htick, b.hcomnam, b.hshrcd, b.hnaics, c.gvkey,
                           AND linkprim in ('P', 'C')) as c
                     ON  a.permno = c.lpermno
                     AND a.date between c.linkdt AND coalesce(c.linkenddt, CAST('9999-12-31' AS DATE))
-             WHERE a.date between CAST('1970-01-01' AS DATE) AND CAST('1989-12-31' AS DATE)
+             WHERE a.date between CAST('2020-01-01' AS DATE) AND CAST('2025-12-31' AS DATE)
                AND b.hshrcd IN (10,11)
                AND a.prc IS NOT NULL """
 
