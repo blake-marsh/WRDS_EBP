@@ -10,21 +10,25 @@ wrds <- dbConnect(Postgres(),
                   sslmode='require',
                   dbname='wrds')
 
-trace_df <- readRDS("./data/trace_enhanced_clean.rds")
-print(paste("Number of trades:", nrow(trace_df)))
-print(dim(trace_df))
-print(head(trace_df))
+setwd("$HOME/WRDS_EBP/")
 
-query = "SELECT
-  a.*,
-  b.amount_outstanding,
-  c.dated_date,
-  c.interest_frequency,
-  c.coupon,
-  c.pay_in_kind,
-  c.coupon_change_indicator,
-  d.rating,
-  d.rating_type
+trace_df = readRDS("./data/trace_enhanced_clean.rds")
+print(paste("Number of trades:", nrow(trace_df)))
+
+#-----------------------
+# Read the mergent data
+#-----------------------
+
+q = "SELECT
+            a.*,
+            b.amount_outstanding,
+            c.dated_date,
+            c.interest_frequency,
+            c.coupon,
+            c.pay_in_kind,
+            c.coupon_change_indicator,
+            d.rating,
+            d.rating_type
 FROM
   (
     SELECT
