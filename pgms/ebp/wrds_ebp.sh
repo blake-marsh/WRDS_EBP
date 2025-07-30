@@ -2,10 +2,7 @@
 #$ -cwd
 
 #$ -N wrds_ebp
-#$ -pe onenode 8
+#$ -pe onenode 6
 #$ -l m_mem_free=6G
 
-YEAR=1988
-MONTH=4
-
-python3 wrds_ebp.py "$YEAR" "$MONTH"
+python3 wrds_ebp.py
