@@ -3,10 +3,10 @@ rm(list = ls())
 library(data.table)
 library(zoo)
 
-setwd("~/WRDS_EBP/")
+setwd("/scratch/frbkc/WRDS_EBP/")
 
 ## load the h15 data
-h15 = fread("./data/H15_B.csv", sep=",", stringsAsFactors=F)
+h15 = fread("H15_B.csv", sep=",", stringsAsFactors=F)
 h15[,date := as.Date(TIME_PERIOD, format='%Y-%m-%d')]
 
 ## convert h15 to decimals
@@ -27,5 +27,5 @@ h15 = h15[which(date >= as.Date('2015-01-01')),list(date, tyd00m, tyd01m, tyd03m
 h15 = h15[complete.cases(h15),]
 
 # Save the data
-h15 = saveRDS(h15, "./data/H15.rds")
+h15 = saveRDS(h15, "H15.rds")
 
