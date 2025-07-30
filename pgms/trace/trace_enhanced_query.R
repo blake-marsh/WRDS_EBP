@@ -4,7 +4,7 @@ library(RPostgres)
 library(data.table)
 library(zoo)
 
-setwd("~/WRDS_EBP/")
+setwd("/scratch/frbkc/WRDS_EBP/")
 
 #---------------------------
 # Connect to WRDS database
@@ -38,8 +38,7 @@ q = "SELECT bond_sym_id, msg_seq_nb, orig_msg_seq_nb, trc_st, asof_cd,
             bloomberg_identifier, yld_pt as yield, rptd_pr as price,
             entrd_vol_qt as quantity, sub_prdct, rpt_side_cd, cntra_mp_id
      FROM trace.trace_enhanced
-     WHERE trd_exctn_dt >= CAST('2021-01-01' AS DATE)
-       AND cusip_id IS NOT NULL"
+     WHERE cusip_id IS NOT NULL"
 
 q <- dbSendQuery(wrds, q)
 df <- dbFetch(q)
@@ -134,7 +133,7 @@ print(paste("Final trade count:", nrow(df_clean)))
 #--------------------
 # Export the dataset
 #--------------------
-saveRDS(df_clean, "./data/trace_enhanced_clean.rds")
-write.table(df_clean, "./data/trace_enhanced_clean.psv", row.names=F, sep="|", na = ".")
+saveRDS(df_clean, "trace_enhanced_clean.rds")
+write.table(df_clean, "trace_enhanced_clean.psv", row.names=F, sep="|", na = ".")
 
 
