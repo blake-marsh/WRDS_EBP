@@ -3,7 +3,7 @@ rm(list = ls())
 library(data.table)
 library(zoo)
 
-setwd("~/unrealized-gains/")
+setwd("~/WRDS_EBP/")
 
 ## load the h15 data
 h15 = fread("./data/H15_B.csv", sep=",", stringsAsFactors=F)

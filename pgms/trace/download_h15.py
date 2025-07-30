@@ -8,7 +8,7 @@ from pathlib import Path
 # set up log files
 #------------------
 old_stdout = sys.stdout
-log_file_name=os.path.join(os.path.expanduser("~/unrealized-gains/logfiles"),'download_h15.log')
+log_file_name=os.path.join(os.path.expanduser("~/WRDS_EBP/logfiles"),'download_h15.log')
 log_file = open(log_file_name,"w")
 sys.stdout = log_file
 
@@ -30,7 +30,7 @@ from pandas.tseries.offsets import MonthEnd
 #-------------------
 # path to save data
 #-------------------
-datapath = os.path.expanduser('~/unrealized-gains/data/')
+datapath = os.path.expanduser('~/WRDS_EBP/data/')
 
 #---------------------------
 # data download function
