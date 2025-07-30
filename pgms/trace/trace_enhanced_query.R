@@ -4,7 +4,7 @@ library(RPostgres)
 library(data.table)
 library(zoo)
 
-setwd("/scratch/frbkc/WRDS_EBP/")
+setwd("~/WRDS_EBP/data/")
 
 #---------------------------
 # Connect to WRDS database
