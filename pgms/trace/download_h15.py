@@ -30,7 +30,7 @@ from pandas.tseries.offsets import MonthEnd
 #-------------------
 # path to save data
 #-------------------
-datapath = os.path.expanduser('/scratch/frbkc/WRDS_EBP/')
+datapath = os.path.expanduser('~/WRDS_EBP/data/')
 
 #---------------------------
 # data download function
