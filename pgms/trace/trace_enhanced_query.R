@@ -4,7 +4,7 @@ library(RPostgres)
 library(data.table)
 library(zoo)
 
-setwd("~/unrealized-gains/")
+setwd("~/WRDS_EBP/")
 
 #---------------------------
 # Connect to WRDS database
@@ -15,36 +15,32 @@ wrds <- dbConnect(Postgres(),
                   sslmode='require',
                   dbname='wrds')
 
-#------------------------------------
-# load unique Y9C cusips and tickers
-#------------------------------------
-
-## cusip matches
-#y9c_cusips = readRDS("./data/y9c_results_cusips.rds")
-#y9c_cusips = y9c_cusips[which(nchar(ID_CUSIP) == 6),]
-#any(duplicated(y9c_cusips[,list(ID_CUSIP)]))
-#cusips = unique(y9c_cusips$ID_CUSIP)
-
-## ticker matches
-#y9c_tcks = readRDS("./data/y9c_results_tcks.rds")
-#any(duplicated(y9c_tcks$id_rssd))
-#tcks = unique(y9c_tcks$htick)
 
 #-------------------
 # query trace data
 #  since 2019:Q1
 #-------------------
 
+## Query to limit dates
+#q = "SELECT bond_sym_id, msg_seq_nb, orig_msg_seq_nb, trc_st, asof_cd,
+#                  CAST(trd_exctn_dt AS DATE) as trd_exctn_dt, trd_exctn_tm,
+#                  cusip_id, substring(cusip_id, 1, 6) as cusip6, company_symbol, 
+#		  bloomberg_identifier, yld_pt as yield, rptd_pr as price,
+#                  entrd_vol_qt as quantity, sub_prdct, rpt_side_cd, cntra_mp_id
+#            FROM trace.trace_enhanced
+#            WHERE trd_exctn_dt >= CAST('2021-01-01' AS DATE)
+#	      AND cusip_id IS NOT NULL"
+
+## full query
 q = "SELECT bond_sym_id, msg_seq_nb, orig_msg_seq_nb, trc_st, asof_cd,
-                  CAST(trd_exctn_dt AS DATE) as trd_exctn_dt, trd_exctn_tm,
-                  cusip_id, substring(cusip_id, 1, 6) as cusip6, company_symbol, 
-		  bloomberg_identifier, yld_pt as yield, rptd_pr as price,
-                  entrd_vol_qt as quantity, sub_prdct, rpt_side_cd, cntra_mp_id
-            FROM trace.trace_enhanced
-            WHERE trd_exctn_dt >= CAST('2021-01-01' AS DATE)
-	      AND cusip_id IS NOT NULL"
-#             # AND (substr(cusip_id, 1, 6) IN ( ", paste(shQuote(cusips), collapse=","), 
-#             # ") OR company_symbol IN ( ", paste(shQuote(tcks), collapse=","),  "))")
+            CAST(trd_exctn_dt AS DATE) as trd_exctn_dt, trd_exctn_tm,
+            cusip_id, substring(cusip_id, 1, 6) as cusip6, company_symbol,
+            bloomberg_identifier, yld_pt as yield, rptd_pr as price,
+            entrd_vol_qt as quantity, sub_prdct, rpt_side_cd, cntra_mp_id
+     FROM trace.trace_enhanced
+     WHERE trd_exctn_dt >= CAST('2021-01-01' AS DATE)
+       AND cusip_id IS NOT NULL"
+
 q <- dbSendQuery(wrds, q)
 df <- dbFetch(q)
 setDT(df)
@@ -58,32 +54,6 @@ df[,trd_exctn_dt_tm_gmt := as.POSIXct(trd_exctn_tm, origin=trd_exctn_dt, tz="GMT
 
 ## raw obs counts
 print(paste("Raw data count: ", nrow(df)))
-
-#------------------
-# Add the bank ids
-#------------------
-
-## add id_rssd for CUSIPs
-#bank_cusips = unique(y9c_cusips[, list(id_rssd, ID_CUSIP)])
-#setnames(bank_cusips, old = c('id_rssd'), new = c('id_rssd_cusip'))
-#any(duplicated(bank_cusips$ID_CUSIP))
-
-#df = merge(df, bank_cusips[,list(id_rssd_cusip, ID_CUSIP)], by.x=c('cusip6'), by.y=c('ID_CUSIP'), all.x=T)
-
-## add ids using tickers
-#setnames(y9c_tcks, old = "id_rssd", new = "id_rssd_tck")
-#df = merge(df, y9c_tcks, by.x=c('company_symbol'), by.y=c('htick'), all.x=T)
-
-## consolidate
-#df[,id_rssd := ifelse(!is.na(id_rssd_cusip), id_rssd_cusip, id_rssd_tck)]
-#df[,(c('id_rssd_cusip', 'id_rssd_tck')) := NULL]
-
-## count rows after merge
-#print(paste('Count after merging bank ids:', nrow(df)))
-
-## count trades by bank
-#bank_trades = df[,list(trades = .N), by=list(id_rssd, company_symbol)]
-#bank_trades = bank_trades[order(-trades),]
 
 #---------------------------------------------
 # Keep non-reversal and non-cancelled records
@@ -166,3 +136,5 @@ print(paste("Final trade count:", nrow(df_clean)))
 #--------------------
 saveRDS(df_clean, "./data/trace_enhanced_clean.rds")
 write.table(df_clean, "./data/trace_enhanced_clean.psv", row.names=F, sep="|", na = ".")
+
+
