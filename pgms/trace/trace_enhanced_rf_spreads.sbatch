@@ -14,7 +14,7 @@
 #SBATCH --mem 500GB ## Select high memory node
 
 #SBATCH --job-name="trace" ## give job a name when listed in squeue
-#SBATCH --output='$HOME/WRDS_EBP/trace.log' ## SBATCH logfile name
+#SBATCH --output='~/WRDS_EBP/trace.log' ## SBATCH logfile name
 
 ##SBATCH --mail-user=blake.marsh@kc.frb.org ## user's email
 ##SBATCH --mail-type=END
