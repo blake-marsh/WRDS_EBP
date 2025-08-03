@@ -14,7 +14,7 @@
 #SBATCH --mem 500GB ## Select high memory node
 
 #SBATCH --job-name="trace" ## give job a name when listed in squeue
-#SBATCH --output='~/WRDS_EBP/trace.log' ## SBATCH logfile name
+#SBATCH --output=/home/kc/j1wbm01//WRDS_EBP/logfiles/trace.log ## SBATCH logfile name
 
 ##SBATCH --mail-user=blake.marsh@kc.frb.org ## user's email
 ##SBATCH --mail-type=END
@@ -28,6 +28,7 @@ echo -e "Job started at: $(date '+%A %m-%d-%Y %X') \n"
 
 ## load the environment variables
 module load gcc
+module load miniconda3
 
 cd ~/WRDS_EBP/
 
