@@ -126,7 +126,7 @@ df[,trd_exctn_dt_tm_gmt := as.POSIXct(trd_exctn_tm, origin=trd_exctn_dt, tz="GMT
 #---------------------------------------
 # Keep trades with fisd characteristics
 #---------------------------------------
-df = merge(df, fisd, by.x=c("cusip"), by.y=c("complete_cusip"))
+df = merge(df, fisd, by.x=c("cusip_id"), by.y=c("complete_cusip"))
 
 ## keep trades with remaining maturity between 6 mo and 30 yr
 #df[,remaining_maturity := (maturity_date - trd_exctn_dt)]
