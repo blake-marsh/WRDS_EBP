@@ -121,7 +121,11 @@ print(paste("TRACE Query time:", end_time - start_time))
 dbDisconnect(wrds)
 
 ## Create a date time
-df[,trd_exctn_dt_tm_gmt := as.POSIXct(trd_exctn_tm, origin=trd_exctn_dt, tz="GMT",format="%H:%M:%S")]
+df[,trd_exctn_dt_tm := as.POSIXct(paste(
+			format(trd_exctn_dt, format="%Y-%m-%d"), 
+			format(trd_exctn_tm, format="%H:%M:%S")), 
+		    tz="GMT", format="%Y-%m-%d %H:%M:%S")]
+
 
 ## check total obs
 print(paste("Raw data count: ", nrow(df)))
