@@ -16,8 +16,8 @@
 #SBATCH --job-name="trace" ## give job a name when listed in squeue
 #SBATCH --output=/home/kc/j1wbm01//WRDS_EBP/logfiles/trace.log ## SBATCH logfile name
 
-##SBATCH --mail-user=blake.marsh@kc.frb.org ## user's email
-##SBATCH --mail-type=END
+#SBATCH --mail-user=blake.marsh@kc.frb.org ## user's email
+#SBATCH --mail-type=END
 
 #-------------
 # system info
