@@ -210,7 +210,7 @@ print(paste("FISD sample count: ", nrow(df_clean)))
 df_clean[,remaining_maturity := as.numeric(maturity_date - trd_exctn_dt)/365]
 df_clean = df_clean[which(!is.na(remaining_maturity) & 0.5 <= remaining_maturity & remaining_maturity <= 30),]
 
-print(paste("sample count after dropping maturity: ", nrow(df)))
+print(paste("sample count after dropping maturity: ", nrow(df_clean)))
 
 #-------------------------------
 # Print final clean sample size
