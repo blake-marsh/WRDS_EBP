@@ -39,6 +39,7 @@ q = "SELECT a.complete_cusip, a.issue_id, a.issue_cusip,
                   WHERE rating_type = 'SPR') as c
               ON a.issue_id = c.issue_id
      WHERE a.coupon_type IN ('Z', 'F')
+       AND a.bond_type IN ('CMTZ', 'CMTN', 'CZ', 'CDEB', 'RTN')
        AND b.country = 'USA'
        AND a.offering_amt >= 1E3
        AND security_level = 'SEN'"
@@ -122,17 +123,7 @@ dbDisconnect(wrds)
 ## Create a date time
 df[,trd_exctn_dt_tm_gmt := as.POSIXct(trd_exctn_tm, origin=trd_exctn_dt, tz="GMT",format="%H:%M:%S")]
 
-
-#---------------------------------------
-# Keep trades with fisd characteristics
-#---------------------------------------
-df = merge(df, fisd, by.x=c("cusip_id"), by.y=c("complete_cusip"))
-
-## keep trades with remaining maturity between 6 mo and 30 yr
-#df[,remaining_maturity := (maturity_date - trd_exctn_dt)]
-#df = df[which(0.5 <= remaining_maturity & remaining_maturity <= 30),]
-
-## raw obs counts
+## check total obs
 print(paste("Raw data count: ", nrow(df)))
 
 #---------------------------------------------
@@ -205,6 +196,21 @@ df_clean = rbindlist(list(df_TR[which(cntra_mp_id == 'C')], agency_s, agency_bno
 
 ## count
 print(paste("After deduping agency trades:", nrow(df_clean)))
+
+#---------------------------------------
+# Keep trades with fisd characteristics
+#---------------------------------------
+df_clean = merge(df_clean, fisd, by.x=c("cusip_id", "cusip6"), by.y=c("complete_cusip", "cusip6"))
+print(paste("FISD sample count: ", nrow(df_clean)))
+
+#--------------------------------------
+# keep trades with remaining maturity 
+# between 6 mo and 30 yr
+#-------------------------------------
+df_clean[,remaining_maturity := as.numeric(maturity_date - trd_exctn_dt)/365]
+df_clean = df_clean[which(!is.na(remaining_maturity) & 0.5 <= remaining_maturity & remaining_maturity <= 30),]
+
+print(paste("sample count after dropping maturity: ", nrow(df)))
 
 #-------------------------------
 # Print final clean sample size
