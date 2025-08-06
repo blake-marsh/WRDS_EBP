@@ -25,9 +25,10 @@ wrds <- dbConnect(Postgres(),
 
 q = "SELECT a.complete_cusip, a.issue_id, a.issue_cusip,
             substring(CAST(TRIM(a.complete_cusip) AS varchar(8)), 1, 6) as cusip6,
-            CAST(a.effective_date AS DATE) as issue_date,
+            CAST(a.delivery_date AS DATE) as issue_date,
             CAST(a.maturity AS DATE) as maturity_date,
-            a.bond_type, a.offering_amt, a.coupon, a.coupon_type, a.interest_frequency,
+            a.bond_type, a.offering_amt, a.coupon, a.coupon_type, 
+	    CAST(a.interest_frequency as int) as interest_frequency,
             a.redeemable, a.security_level,
             b.naics_code, b.sic_code, b.country, b.legal_name, b.cusip_name, b.parent_id,
             c.rating, c.rating_type, c.rating_date
@@ -87,7 +88,7 @@ nrow(crsp)
 #---------------------
 
 ## merge data
-fisd = merge(crsp, fisd, by.x=c("cusip6", "date"), by.y=c("cusip6", "issue_date"))
+fisd = merge(fisd, crsp, by.x=c("cusip6", "issue_date"), by.y=c("cusip6", "date"))
 
 ## dedup (need to link compustat later)
 fisd = fisd [which(!duplicated(complete_cusip)),]
@@ -215,6 +216,28 @@ df_clean[,remaining_maturity := as.numeric(maturity_date - trd_exctn_dt)/365]
 df_clean = df_clean[which(!is.na(remaining_maturity) & 0.5 <= remaining_maturity & remaining_maturity <= 30),]
 
 print(paste("sample count after dropping maturity: ", nrow(df_clean)))
+
+
+#--------------------------------------------
+# Keep the last trade by between 9AM and 4PM
+#--------------------------------------------
+
+## keep trades between 9AM and 4PM
+df_clean = df_clean[which(9 <= as.numeric(format(trd_exctn_dt_tm, format="%H")) & as.numeric(format(trd_exctn_dt_tm, format="%H")) <= 16),]
+
+## sort trades
+df_clean = df_clean[order(cusip_id, trd_exctn_dt, trd_exctn_tm),]
+
+## sequence trades
+df_clean[,seq := seq_len(.N), by=list(cusip_id, trd_exctn_dt)]
+df_clean[,max_seq := max(seq), by=list(cusip_id, trd_exctn_dt)]
+df_clean = df_clean[which(seq == max_seq),]
+df_clean[,(c("seq", "max_seq")) := NULL]
+
+#------------------------------------------
+# Check duplicates by cusip and trade date 
+#------------------------------------------
+any(duplicated(df_clean[,list(cusip_id, trd_exctn_dt)]))
 
 #-------------------------------
 # Print final clean sample size
