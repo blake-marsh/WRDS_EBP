@@ -62,7 +62,7 @@ df['age'] = (df['trd_exctn_dt'] - df['offering_date']).dt.days
 
 df['call'] = df['redeemable'].map({'Y': 1, 'N': 0}).astype(int)
 
-df['lspr'] = np.log(df['rf_spread_discrete']) #rf_spread_discrete?
+df['lspr'] = np.log(df['rf_spread']) #rf_spread_discrete?
 df['lduration'] = np.log(df['duration_mac'])
 df['lparvalue'] = np.log(df['principal_amt'])
 df['lcoupon'] = np.log(df['coupon'])
@@ -74,8 +74,11 @@ df['call_lparvalue'] = df['call'] * df['lparvalue']
 df['call_lcoupon'] = df['call'] * df['lcoupon']
 df['call_lage'] = df['call'] * df['lage']
 
-X = df[['DD', 'lduration', 'lparvalue', 'lcoupon', 'lage',
-        'call', 'call_dd', 'call_lduration', 'call_lparvalue', 'call_lcoupon', 'call_lage']]
+X = df[['DD', 'lduration', 'lparvalue', 
+        'lcoupon', 'lage', 'call', 
+        'call_dd', 'call_lduration', 
+        'call_lparvalue', 'call_lcoupon', 
+        'call_lage']]
 X = sm.add_constant(X)
 y = df['lspr']
 
@@ -85,14 +88,14 @@ df['lspr_p'] = model.predict(X)
 sig2 = model.mse_resid
 df['spr_p'] = np.exp(df['lspr_p'] + 0.5*sig2)
 
-df['ebp'] = df['rf_spread_discrete'] - df['spr_p']
+df['ebp'] = df['rf_spread'] - df['spr_p']
 
 # Summary statistics
 df['maturity_date'] = pd.to_datetime(df['maturity_date'])
 df['offering_date'] = pd.to_datetime(df['offering_date'])
 df['maturity_at_issue'] = (df['maturity_date'] - df['offering_date']).dt.days / 365
 df['time_to_maturity'] = (df['maturity_date'] - df['trd_exctn_dt']).dt.days / 365
-df = df[['trd_exctn_dt', 'date', 'ebp', 'DD', 'maturity_at_issue', 'time_to_maturity', 'duration_mac', 'coupon','rf_spread_discrete','principal_amt']]
+df = df[['trd_exctn_dt', 'date', 'ebp', 'DD', 'maturity_at_issue', 'time_to_maturity', 'duration_mac', 'coupon','rf_spread','principal_amt']]
 print(df.describe())
 
 # Save to File
