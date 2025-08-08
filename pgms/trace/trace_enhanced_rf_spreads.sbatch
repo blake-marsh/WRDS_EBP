@@ -52,22 +52,11 @@ R CMD BATCH --no-save --no-restore ./pgms/trace/format_h15.R ./logfiles/format_h
 # get trace data and process
 #------------------------------
 R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_query.R ./logfiles/trace_enhanced_query.Rout
-#R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_debt_types.R ./logfiles/trace_enhanced_debt_types.Rout
-
-#----------------------------------------
-# bond characteristics from FISD mergent
-#----------------------------------------
-#R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_with_fisd_characteristics.R ./logfiles/trace_enhanced_with_fisd_characteristics.Rout
-
-#----------------------------
-# determine the trace sample
-#----------------------------
-#R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_sample.R ./logfiles/trace_enhanced_sample.Rout
 
 #----------------------------------------------------------
 # calculate the risk-free spreads off synthetic Treasuries
 #----------------------------------------------------------
-#R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_rf_spreads.R ./logfiles/trace_enhanced_rf_spreads.Rout
+R CMD BATCH --no-save --no-restore ./pgms/trace/trace_enhanced_rf_spreads.R ./logfiles/trace_enhanced_rf_spreads.Rout
 
 deactivate
 
