@@ -23,7 +23,7 @@ wrds <- dbConnect(Postgres(),
 #----------------------------------
 
 
-q = "SELECT a.complete_cusip, a.issue_id, a.issue_cusip,
+q = "SELECT a.complete_cusip, a.issue_id, TRIM(a.issue_cusip) as issue_cusip,
             substring(CAST(TRIM(a.complete_cusip) AS varchar(8)), 1, 6) as cusip6,
             CAST(a.delivery_date AS DATE) as issue_date,
             CAST(a.maturity AS DATE) as maturity_date,
@@ -56,7 +56,8 @@ nrow(fisd)
 #------------
 # CRSP table
 #------------
-q = "SELECT d.date, d.permno, d.permco, d.cusip, d.prc, e.htick, f.gvkey,
+q = "SELECT d.date, d.permno, d.permco, TRIM(d.cusip) as cusip, 
+            d.prc, e.htick, f.gvkey,
             substring(CAST(e.hcusip AS varchar(8)), 1, 6) as cusip6
      FROM crspq.dsf62 as d
        INNER JOIN (SELECT permno, permco, htick, hcusip, begdat, enddat
@@ -105,8 +106,8 @@ start_time = Sys.time()
 
 q = "SELECT bond_sym_id, msg_seq_nb, orig_msg_seq_nb, trc_st, asof_cd,
             CAST(trd_exctn_dt AS DATE) as trd_exctn_dt, trd_exctn_tm,
-            cusip_id, substring(cusip_id, 1, 6) as cusip6, company_symbol,
-            bloomberg_identifier, yld_pt as yield, rptd_pr as price,
+            TRIM(cusip_id) as cusip_id, substring(TRIM(cusip_id), 1, 6) as cusip6, 
+	    company_symbol, bloomberg_identifier, yld_pt as yield, rptd_pr as price,
             entrd_vol_qt as quantity, sub_prdct, rpt_side_cd, cntra_mp_id
      FROM trace.trace_enhanced"
 #             ON e.cusip_id = f.complete_cusip
