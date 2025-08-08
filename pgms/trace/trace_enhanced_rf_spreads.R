@@ -1,13 +1,16 @@
 rm(list = ls())
 
+print(paste("Job start:", Sys.time()))
+
 library(data.table)
 library(zoo)
 library(lubridate)
 library(RPostgres)
 library(stats)
 library(parallel)
+library(feather)
 
-setwd("~/WRDS_EBP/unrealized-gains")
+setwd("~/WRDS_EBP/")
 
 #----------------
 # Parallel setup
@@ -19,12 +22,10 @@ print(paste("Cores:", cores))
 # FUNCTION: coupon dates
 #-------------------------
 cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn="pmts"){
-	if (any(is.na(issue_date), is.na(maturity_date))) return (NA)
-	if (length(issue_date) == 0|| length(maturity_date)== 0) return (NA)
-     
+
   ## Figure out the months between coupons
 
-  if (is.na(cpn_freq)) { 
+  if (cpn_freq %in% c(0, 99)) { 
     cpn_freq = 1
   }
 
@@ -66,6 +67,7 @@ cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn
   return(r)
 }
 
+
 #---------------------------------------
 # FUNCTION: Present value calcuation of risk-free
 # using market rates
@@ -73,7 +75,7 @@ cpn_dates <- function(issue_date, maturity_date, trade_date=NA, cpn_freq=NA, rtn
 PV_calc <- function(trade_date, issue_date, maturity_date, coupon, cpn_freq, method="continuous") {
 
     ## get coupon payment 
-    if (is.na(cpn_freq)) {
+    if (cpn_freq %in% c(0, 99)) {
          
 	coupon_pmt = 0
 	cpn_freq = 1
@@ -168,7 +170,20 @@ ytm_func <- function(r, PV, nper, coupon, cpn_freq, method="continuous") {
   return(diff)
 }
 
+get_ytm <- function(PV, nper, coupon, cpn_freq, method="continuous") {
+
+ r = tryCatch(
+    uniroot(f=ytm_func, interval=c(1E-15, 10), PV=PV, nper=nper, coupon=coupon, cpn_freq=cpn_freq, method=method, tol=1E-6)$root, 
+    error = function(e) { return(NA) }
+ )
+ return(r)
+}
+
+#-----------------------------
+# FUNCTION: Macaulay duration
+#-----------------------------
 duration_macaulay <- function(maturity, coupon_rate, ytm, principal, freq) {
+
 	if (is.na(ytm) || ytm <= 0 || freq <= 0 || is.na(maturity) || is.na(coupon_rate)) return (NA)
 	n <- maturity * freq
 	t <- seq(1, n) / freq
@@ -182,18 +197,10 @@ duration_macaulay <- function(maturity, coupon_rate, ytm, principal, freq) {
 	D_mac <- sum(t * cashflows * discount_factors) / PV_total
 	return(D_mac)
 }
+
 #I guess we pass in interest_freq into freq.
 duration_investopedia <- duration_macaulay(3, 0.06, 0.06, 1000, 2)
 print(paste("Macaulay duration:", duration_investopedia))
-
-get_ytm <- function(PV, nper, coupon, cpn_freq, method="continuous") {
-
- r = tryCatch(
-    uniroot(f=ytm_func, interval=c(1E-15, 10), PV=PV, nper=nper, coupon=coupon, cpn_freq=cpn_freq, method=method, tol=1E-6)$root, 
-    error = function(e) { return(NA) }
- )
- return(r)
-}
 
 #------------------
 # Load TRACE data
@@ -201,9 +208,8 @@ get_ytm <- function(PV, nper, coupon, cpn_freq, method="continuous") {
 
 start.time = Sys.time()
 
-df = readRDS("./data/trace_enhanced_sample.rds")
-df[, time_to_maturity := as.numeric(maturity_date - trd_exctn_dt) / 365]
-df[, interest_frequency := as.numeric(interest_frequency)]
+df = readRDS("./data/trace_enhanced_clean.rds")
+
 end.time = Sys.time()
 
 print(paste("trace load time:", end.time - start.time))
@@ -215,7 +221,7 @@ print(paste("TRACE sample rows:", nrow(df)))
 
 ## read the data
 h15 = readRDS("./data/H15.rds")
-h15 = h15[which(date >= as.Date('2015-01-01')),]
+h15 = h15[which(date >= as.Date('2000-01-01')),]
 
 ## reshape the data
 cols = names(h15)[which(substr(names(h15), 1, 3) == "tyd")]
@@ -237,96 +243,94 @@ h15[,(c("fstub", "nstub")) := NULL]
 #----------------
 # Sample data
 #----------------
-#df = df[which(trd_exctn_dt == as.Date('2019-01-07') & cusip_id == '46625HJZ4'),]
-#df = df[which(trd_exctn_dt == as.Date('2019-01-04') & cusip_id == '46625HJZ4'),]
-#df = df[1:20000]
-#df = df[3600000:3620000,]
-#print(nrow(df))
-#print(df[3610000])
-#print(df[3600001])
-#df = df[which(zero_cpn == 1),]
-safe_cpn_dates <- function(...) {
-	tryCatch(cpn_dates(...), error = function(e) {
-	message("Error in cpn_dates():", e$message)
-	return(NA)
-})
-}
-safe_PV_calc <- function(trade_date, issue_date, maturity_date, coupon, cpn_freq, method = "continuous") {
-	out <- tryCatch(
-	PV_calc(trade_date, issue_date, maturity_date, coupon, cpn_freq, method),
-	error = function(e) NA_real_
-)
-#print(paste("error:", error, trade_date, issue_date, maturity_date, coupon, cpn_freq))
-if (is.null(out) || length(out) != 1 || is.na(out)) return(NA_real_)
-return(as.numeric(out))
-}
+#df = df[which(trd_exctn_dt == as.Date('2017-05-30') & cusip_id == '00206RCN0'),]
+#df = df[1:20000,]
+#df = df[which(year(trd_exctn_dt) == 2022),]
 
 #--------------------------------------------
 # Determine the number of payments remaining
 #--------------------------------------------
+start.time = Sys.time()
+df[,nper := mcmapply(cpn_dates, issue_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("nper time:", end.time - start.time))
 
-output_file <- "/scratch/frbkc/trace_enhanced_rf_spreads.psv"
-count_file <- "./data/trace_enhanced_observation_count.rds"
-first_chunk <- TRUE
-obs_counts <- list()
-#100000 for full run?
-#610000
-#600000
-#620000
-chunk_size <- 100000
-num_chunks <- ceiling(nrow(df) / chunk_size)
-for (i in 1:num_chunks) {
-	print(paste("Processing chunk", i, "of", num_chunks))
-	start_row <- ((i - 1) * chunk_size) + 1
-	end_row <- min(i * chunk_size, nrow(df))
-	chunk <- df[start_row:end_row]
-tryCatch({	
-chunk = chunk[!is.na(trd_exctn_dt) & !is.na(offering_date) & !is.na(maturity_date) & !is.na(coupon) & !is.na(interest_frequency) & interest_frequency > 0 & maturity_date > offering_date]
+saveRDS(df, "./data/trace_enhanced_sample_w_payments.rds")
 
-chunk[,nper := mcmapply(safe_cpn_dates, offering_date, maturity_date, trd_exctn_dt, interest_frequency, rtn="pmts", mc.cores=cores)]
-#print(paste("bad checunk:", chunk[is.na(nper) | nper == 0][1]))
+#----------------------------------------------------
+# Calculate present value of the risk free synthetic
+#----------------------------------------------------
+start.time = Sys.time()
+df[,price_rf := mcmapply(PV_calc, trd_exctn_dt, issue_date, maturity_date, coupon, interest_frequency, method="continuous", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("RF continuous pricing time:", end.time - start.time))
 
-chunk[,price_rf := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency,method="continuous", mc.cores=cores)]
-chunk[,price_rf_discrete := mcmapply(safe_PV_calc, trd_exctn_dt, offering_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+start.time = Sys.time()
+df[,price_rf_discrete := mcmapply(PV_calc, trd_exctn_dt, issue_date, maturity_date, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("RF discrete pricing time:", end.time - start.time))
 
-chunk[,ytm_rf := mcmapply(get_ytm, price_rf, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
-chunk[,ytm_rf_discrete := mcmapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+#-------------------------
+# Solve for risk-free YTM
+#-------------------------
+start.time = Sys.time()
+df[,ytm_rf := mcmapply(get_ytm, price_rf, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("Risk-free continuous YTM time:", end.time - start.time))
 
-chunk[,ytm_trade := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
-chunk[,ytm_trade_discrete := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="discrete",mc.cores=cores)]
+start.time = Sys.time()
+df[,ytm_rf_discrete := mcmapply(get_ytm, price_rf_discrete, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("Risk-free discrete YTM time:", end.time - start.time))
 
-chunk[, duration_mac := mcmapply(duration_macaulay, maturity = time_to_maturity, coupon_rate = coupon / 100, ytm = ytm_rf, principal = principal_amt, freq = interest_frequency, mc.cores = cores)]
+#----------------------
+# Solve for trade YTM
+#---------------------
+start.time = Sys.time()
+df[,ytm_trade := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="continuous", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("Trade continuous YTM time:", end.time - start.time))
 
-chunk[,rf_spread := 100*100*(yield/100 - ytm_rf)]
-chunk[,rf_spread_discrete := 100*100*(yield/100 - ytm_rf_discrete)]
-## spreads with calculate yield from TRACE price
-chunk[,rf_spread_recalc := 100*100*(ytm_trade - ytm_rf)]
-chunk[,rf_spread_recalc_discrete := 100*100*(ytm_trade_discrete - ytm_rf_discrete)]
+start.time = Sys.time()
+df[,ytm_trade_discrete := mcmapply(get_ytm, price, nper, coupon, interest_frequency, method="discrete", mc.cores=cores)]
+end.time = Sys.time()
+print(paste("Trade discrete YTM time:", end.time - start.time))
+
+#-------------------
+# calculate spreads
+#-------------------
+
+## spreads from reported TRACE yields
+df[,rf_spread := 100*100*(yield/100 - ytm_rf)]
+df[,rf_spread_discrete := 100*100*(yield/100 - ytm_rf_discrete)]
+
+## spreads with calculated yield from TRACE price
+df[,rf_spread_recalc := 100*100*(ytm_trade - ytm_rf)]
+df[,rf_spread_recalc_discrete := 100*100*(ytm_trade_discrete - ytm_rf_discrete)]
+
+#--------------------------------------
+# Count obs with missing yield spreads
+#--------------------------------------
+
+#obs_count = readRDS("./data/trace_enhanced_observation_count.rds")
+
+#missing_count = df[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
+#                                          CUSIPs = length(unique(cusip_id)),
+#                                          banks = length(unique(id_rssd)))]
+#missing_count[,step := "Missing Spread"]
+
+#obs_count = rbindlist(list(obs_count, missing_count), use.names=T, fill=T)
+#print(obs_count)
+
+#saveRDS(obs_count, "./data/trace_enhanced_observation_count.rds")
+
+#-------------
+# Export data
+#-------------
+saveRDS(df, "./data/trace_enhanced_rf_spreads.rds")
+write_feather(df, "./data/trace_enhanced_rf_spreads.feather")
+#write.table(df, "./data/trace_enhanced_rf_spreads.psv", sep="|", row.names=F, na="")
+
+print(paste("Job end:", Sys.time()))
 
 
-missing_count <- chunk[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
-                                          CUSIPs = length(unique(cusip_id)),
-                                          banks = length(unique(id_rssd)))]
-missing_count[, step := paste0("Missing Spread - chunk", i)]
-obs_counts[[i]] <- missing_count
-#list_cols <- sapply(chunk, is.list)
-#print(which(list_cols))
-#print(names(chunk)[list_cols])
-
-fwrite(chunk, output_file, sep="|", append=!first_chunk, col.names=first_chunk, na="NA")
-#tryCatch({
-#}, error = function(e) {
-#	print(paste("fwrite failed on chunk", i, ":", e$message))
-#	fwrite(chunk[1:5], paste0("failed_chunk_", i, ".csv"))
-#})
-
-first_chunk <- FALSE
-rm(chunk)
-gc()
-}, error = function(e) {
-	message(paste("Error in chunk", i, ":", e$message))
-})
-}
-obs_count_all = rbindlist(obs_counts, use.names=T, fill=T)
-saveRDS(obs_count_all, "/scratch/frbkc/trace_enhanced_observation_count.rds")
-print(obs_count_all)
