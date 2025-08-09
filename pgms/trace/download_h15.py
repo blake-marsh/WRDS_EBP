@@ -180,6 +180,28 @@ for i in stubs:
    temp.to_csv(temp_name, index=False, na_rep=".")
 
 
+#--------------
+# Get EBP data
+#--------------
+data_download("Excess Bond Premia",
+              "https://www.federalreserve.gov/econres/notes/feds-notes/ebp_csv.csv",
+              datapath,
+              "EBP.csv",
+              headers=[('User-Agent', 'AnApp/1.0')])
+
+
+
+
+
+#------------------
+# Get ATL EBP data
+#------------------
+data_download("Excess Bond Premia - ATL",
+              "https://www.atlantafed.org/-/media/documents/research/publications/policy-hub/2021/09/24/excess-bond-premium-data.xlsx",
+              datapath,
+              "EBP_atl.xlsx",
+              headers=[('User-Agent', 'AnApp/1.0')])
+
 ## Close log
 #------------------------------------------------------
 print("Log closed on " + str(datetime.datetime.now()))
