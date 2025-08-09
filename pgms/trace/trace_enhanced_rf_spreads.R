@@ -308,21 +308,11 @@ df[,rf_spread_discrete := 100*100*(yield/100 - ytm_rf_discrete)]
 df[,rf_spread_recalc := 100*100*(ytm_trade - ytm_rf)]
 df[,rf_spread_recalc_discrete := 100*100*(ytm_trade_discrete - ytm_rf_discrete)]
 
-#--------------------------------------
-# Count obs with missing yield spreads
-#--------------------------------------
+#----------------------------------
+# Drop outliers and missing values
+#----------------------------------
 
-#obs_count = readRDS("./data/trace_enhanced_observation_count.rds")
-
-#missing_count = df[(!is.na(yield) | !is.na(ytm_trade)),list(trades = .N,
-#                                          CUSIPs = length(unique(cusip_id)),
-#                                          banks = length(unique(id_rssd)))]
-#missing_count[,step := "Missing Spread"]
-
-#obs_count = rbindlist(list(obs_count, missing_count), use.names=T, fill=T)
-#print(obs_count)
-
-#saveRDS(obs_count, "./data/trace_enhanced_observation_count.rds")
+df = df[which(5 <= rf_spread_recalc & rf_spread_recalc <= 3500 & !is.na(rf_spread_recalc)),]
 
 #-------------
 # Export data
