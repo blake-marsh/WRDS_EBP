@@ -53,6 +53,9 @@ any(duplicated(fisd$complete_cusip))
 nrow(fisd)
 
 
+saveRDS(fisd, "FISD_sample.rds")
+write_feather(fisd, "FISD_sample.feather")
+
 #------------
 # CRSP table
 #------------
